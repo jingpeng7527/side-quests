@@ -38,39 +38,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     return new Response("couldn't find a free code", { status: 503 });
   }
 
-  // GET /api/lobbies/:code -> summary, GET /api/lobbies/:code/ws -> WebSocket
+  // GET /api/lobbies/:code -> summary, …/ws -> WebSocket, …/photos[/:id] -> the lobby's proof photos
   if (parts[1] === "lobbies" && parts[2]) {
     const stub = lobby(env, parts[2].toUpperCase());
-    if (parts[3] === "ws") return stub.fetch(request);
+    if (parts[3] === "ws" || parts[3] === "photos") return stub.fetch(request);
     return stub.fetch("https://lobby/info");
-  }
-
-  // POST /api/photos — JSON { data: <base64 JPEG> } (what the app sends) or a raw image/jpeg body -> { url }
-  if (parts[1] === "photos" && parts.length === 2 && request.method === "POST") {
-    let bytes: Uint8Array;
-    try {
-      bytes = request.headers.get("Content-Type")?.includes("json")
-        ? Uint8Array.from(atob(((await request.json()) as { data: string }).data), (c) => c.charCodeAt(0))
-        : new Uint8Array(await request.arrayBuffer());
-    } catch {
-      return new Response("expected { data: base64 }", { status: 400 });
-    }
-    // Refuse anything that isn't a JPEG, so a broken upload fails loudly instead of storing junk.
-    if (bytes.length < 100 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return new Response("not a JPEG", { status: 400 });
-    if (bytes.length > 8_000_000) return new Response("photo too large", { status: 413 });
-    const key = `${crypto.randomUUID()}.jpg`;
-    await env.PHOTOS.put(key, bytes, { httpMetadata: { contentType: "image/jpeg" } });
-    // Relative: each device prefixes the server address it can reach (localhost, 10.0.2.2, LAN IP…).
-    return Response.json({ url: `/api/photos/${key}` });
-  }
-
-  // GET /api/photos/:key
-  if (parts[1] === "photos" && parts[2]) {
-    const obj = await env.PHOTOS.get(parts[2]);
-    if (!obj) return new Response("not found", { status: 404 });
-    return new Response(obj.body, {
-      headers: { "Content-Type": obj.httpMetadata?.contentType ?? "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" },
-    });
   }
 
   // GET /api/directions?from=lat,lng&to=lat,lng -> WalkingRoute

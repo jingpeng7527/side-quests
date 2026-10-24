@@ -49,6 +49,12 @@ export const DURATION_OPTIONS = [2, 5, 10, 15, 30, 60] as const;
 /** How long everyone sees "moving on in…" before a host-requested phase change lands. */
 export const TRANSITION_MS = 3_000;
 
+/** If the host's phone has been away this long, hosting passes to someone still here. */
+export const HOST_HANDOFF_MS = 60_000;
+
+/** A lobby (and its photos) is deleted this long after anything last happened in it. */
+export const LOBBY_TTL_MS = 24 * 60 * 60_000;
+
 /** A photo snapped before the buzzer still counts if it arrives within this long after. */
 export const SUBMIT_GRACE_MS = 30_000;
 
@@ -116,6 +122,7 @@ export type Action =
   | { type: "cancelTransition" }
   | { type: "setReady"; playerId: ID; ready: boolean }
   | { type: "setAway"; playerId: ID; away: boolean }
+  | { type: "setHost"; playerId: ID }
   | { type: "updateSettings"; settings: GameSettings }
   | { type: "addQuest"; quest: Quest }
   | { type: "removeQuest"; questId: ID }

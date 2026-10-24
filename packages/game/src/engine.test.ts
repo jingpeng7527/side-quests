@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptingProofs, apply, authorize, freshQuestCount, newGame, ranking, readiness } from "./engine";
+import { acceptingProofs, apply, authorize, freshQuestCount, newGame, nextHost, ranking, readiness } from "./engine";
 import { SUBMIT_GRACE_MS, TRANSITION_MS, type GameState, type Player, type Quest, type Submission } from "./types";
 
 const host: Player = { id: "host", name: "Ryan" };
@@ -179,5 +179,28 @@ describe("the buzzer", () => {
     expect(acceptingProofs(s, end - 1_000, end + SUBMIT_GRACE_MS + 1)).toBe(false);
     const late = apply(s, { type: "submit", submission: { ...proof(s.assignments.host, "host"), takenAt: end - 500 } }, end + 1_000);
     expect(late.submissions).toHaveLength(1);
+  });
+});
+
+describe("host handoff", () => {
+  it("passes hosting to the first human who's still here", () => {
+    let s = lobby();
+    s = apply(s, { type: "join", player: { id: "bot", name: "Juno", isBot: true } });
+    s = apply(s, { type: "setAway", playerId: "host", away: true });
+    s = apply(s, { type: "setAway", playerId: "ana", away: true });
+    expect(nextHost(s)?.id).toBe("bo");
+    s = apply(s, { type: "requestPhase", phase: "writing" });
+    s = apply(s, { type: "setHost", playerId: "bo" });
+    expect(s.hostId).toBe("bo");
+    expect(s.transition).toBeUndefined();
+    expect(authorize(s, { type: "requestPhase", phase: "writing" }, "bo")).toBe(true);
+    expect(authorize(s, { type: "requestPhase", phase: "writing" }, "host")).toBe(false);
+  });
+
+  it("never hands hosting to a bot, and only the server can hand it over", () => {
+    let s = newGame("ABCD", host, { aiMode: "offline", devTools: false });
+    s = apply(s, { type: "join", player: { id: "bot", name: "Juno", isBot: true } });
+    expect(nextHost(s)).toBeUndefined();
+    expect(authorize(s, { type: "setHost", playerId: "ana" }, "ana")).toBe(false);
   });
 });

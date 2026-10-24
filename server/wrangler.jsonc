@@ -16,7 +16,6 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "side-quests-photos" }],
   // Dev shortcuts (bots via DEV menu, skip to end, seeding). Set to "0" in production.
   "vars": { "DEV_TOOLS": "1" }
   // ANTHROPIC_API_KEY is a secret: `wrangler secret put ANTHROPIC_API_KEY`, or .dev.vars locally.

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node ../scripts/ensure-web.mjs && wrangler dev --ip 0.0.0.0 --port 8787",
-    "deploy": "node ../scripts/ensure-web.mjs && wrangler deploy",
+    "deploy": "node ../scripts/ensure-web.mjs && wrangler deploy --var DEV_TOOLS:0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -26,7 +26,7 @@ export function newGame(code: string, host: Player, opts: { aiMode: GameState["a
 // The host moves the game along with requestPhase; the server lands it (setPhase /
 // startGame) after everyone has had a few seconds' warning.
 const HOST_ONLY = new Set<Action["type"]>(["requestPhase", "cancelTransition", "updateSettings", "toggleQuest"]);
-const SERVER_ONLY = new Set<Action["type"]>(["addAIQuests", "setAIWriting", "setPhase", "startGame", "setAway"]);
+const SERVER_ONLY = new Set<Action["type"]>(["addAIQuests", "setAIWriting", "setPhase", "startGame", "setAway", "setHost"]);
 
 /** Whether `actor` may perform `action`. The server may do anything. */
 export function authorize(state: GameState, action: Action, actor: Actor): boolean {
@@ -95,6 +95,13 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
     case "setReady":
       if (!!s.ready[action.playerId] === action.ready) return prev;
       s.ready[action.playerId] = action.ready;
+      return s;
+
+    case "setHost":
+      if (s.hostId === action.playerId || !s.players.some((p) => p.id === action.playerId)) return prev;
+      s.hostId = action.playerId;
+      // A move the old host asked for shouldn't land on the new host's watch.
+      delete s.transition;
       return s;
 
     case "setAway": {
@@ -213,6 +220,12 @@ export function readiness(s: GameState): { ready: Player[]; waiting: Player[]; a
     waiting: here.filter((p) => !s.ready[p.id]),
     away: s.players.filter((p) => gone.has(p.id)),
   };
+}
+
+/** Who should take over hosting: the first human player who's still here. */
+export function nextHost(s: GameState): Player | undefined {
+  const away = new Set(s.away ?? []);
+  return s.players.find((p) => p.id !== s.hostId && !p.isBot && !away.has(p.id));
 }
 
 /** What the host's "move on" button leads to from each phase. */

@@ -1,11 +1,14 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  HOST_HANDOFF_MS,
+  LOBBY_TTL_MS,
   apply,
   authorize,
   demoPlace,
   distance,
   freshQuestCount,
   newGame,
+  nextHost,
   newSeed,
   waitingPlayers,
   type Action,
@@ -23,9 +26,11 @@ import { writeQuests } from "./quests";
 
 export interface Env {
   LOBBY: DurableObjectNamespace<Lobby>;
-  PHOTOS: R2Bucket;
   ANTHROPIC_API_KEY?: string;
   DEV_TOOLS?: string;
+  /** Overrides for testing: how long a quiet lobby lives, and how long before an away host is replaced. */
+  LOBBY_TTL_SECONDS?: string;
+  HOST_HANDOFF_SECONDS?: string;
 }
 
 /**
@@ -38,6 +43,8 @@ export class Lobby extends DurableObject<Env> {
   /** Last known position of the host — anchors bot photos and demo places. */
   hostLocation?: Coordinate;
   private sockets = new Map<WebSocket, string>();
+  /** When anything last happened here; the lobby is deleted LOBBY_TTL_MS after. */
+  private lastActivity = Date.now();
   /** When a top-up adds nothing new (deck exhausted, duplicates), wait before asking again. */
   private aiRetryAfter = 0;
   private bots = new Bots(this);
@@ -46,6 +53,7 @@ export class Lobby extends DurableObject<Env> {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
       this.state = (await ctx.storage.get<GameState>("state")) ?? null;
+      this.lastActivity = (await ctx.storage.get<number>("lastActivity")) ?? Date.now();
       // Lobbies saved before these fields existed; and after a restart nobody is connected yet.
       if (this.state) {
         this.state.ready ??= {};
@@ -74,6 +82,17 @@ export class Lobby extends DurableObject<Env> {
       return Response.json({ code: this.state.code, hostName: host?.name ?? "", players: this.state.players.length, phase: this.state.phase });
     }
 
+    // Proof photos live with their lobby: POST …/photos stores one, GET …/photos/:id serves it.
+    // (Lobby storage holds values up to 2 MB; the app sends ~200–500 KB JPEGs.)
+    const photo = url.pathname.match(/\/photos(?:\/([a-f0-9-]+)\.jpg)?$/);
+    if (photo) {
+      if (!this.state) return new Response("no such lobby", { status: 404 });
+      if (request.method === "POST") return this.storePhoto(request);
+      const bytes = photo[1] && (await this.ctx.storage.get<Uint8Array>(`photo:${photo[1]}`));
+      if (!bytes) return new Response("not found", { status: 404 });
+      return new Response(bytes, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400, immutable" } });
+    }
+
     if (request.headers.get("Upgrade") === "websocket") {
       if (!this.state) return new Response("no such lobby", { status: 404 });
       const [client, server] = Object.values(new WebSocketPair());
@@ -87,9 +106,61 @@ export class Lobby extends DurableObject<Env> {
     return new Response("not found", { status: 404 });
   }
 
+  /**
+   * One alarm does two jobs: end the game when the clock runs out, and delete
+   * the lobby (and its photos) once it's been quiet for LOBBY_TTL_MS.
+   */
   async alarm() {
     const s = this.state;
-    if (s?.phase === "playing" && s.endsAt && Date.now() >= s.endsAt - 250) this.dispatch({ type: "setPhase", phase: "ended" }, "server");
+    if (!s) return;
+    if (s.phase === "playing" && s.endsAt && Date.now() >= s.endsAt - 250) {
+      this.dispatch({ type: "setPhase", phase: "ended" }, "server");
+      return;
+    }
+    if (Date.now() >= this.lastActivity + this.ttl - 1000) await this.expire();
+    else await this.scheduleAlarm();
+  }
+
+  private get ttl() {
+    return Number(this.env.LOBBY_TTL_SECONDS) * 1000 || LOBBY_TTL_MS;
+  }
+
+  private async scheduleAlarm() {
+    const s = this.state;
+    if (!s) return;
+    const expiry = this.lastActivity + this.ttl;
+    const gameEnd = s.phase === "playing" && s.endsAt && s.endsAt > Date.now() ? s.endsAt : Infinity;
+    await this.ctx.storage.setAlarm(Math.min(expiry, gameEnd));
+  }
+
+  /** JSON { data: <base64 JPEG> } (what the app sends) or a raw image/jpeg body -> { url } */
+  private async storePhoto(request: Request): Promise<Response> {
+    let bytes: Uint8Array;
+    try {
+      bytes = request.headers.get("Content-Type")?.includes("json")
+        ? Uint8Array.from(atob(((await request.json()) as { data: string }).data), (c) => c.charCodeAt(0))
+        : new Uint8Array(await request.arrayBuffer());
+    } catch {
+      return new Response("expected { data: base64 }", { status: 400 });
+    }
+    // Refuse anything that isn't a JPEG, so a broken upload fails loudly instead of storing junk.
+    if (bytes.length < 100 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return new Response("not a JPEG", { status: 400 });
+    if (bytes.length > 2_000_000) return new Response("photo too large", { status: 413 });
+    const id = crypto.randomUUID();
+    await this.ctx.storage.put(`photo:${id}`, bytes);
+    this.lastActivity = Date.now();
+    // Relative: each device prefixes the server address it can reach (localhost, 10.0.2.2, LAN IP…).
+    return Response.json({ url: `/api/lobbies/${this.state!.code}/photos/${id}.jpg` });
+  }
+
+  /** Photos and all: nothing about a quiet lobby outlives its TTL. */
+  private async expire() {
+    for (const ws of this.sockets.keys()) ws.close(1000, "lobby expired");
+    this.sockets.clear();
+    this.bots.phaseChanged("lobby");
+    this.state = null;
+    await this.ctx.storage.deleteAll(); // state, photos and all
+    await this.ctx.storage.deleteAlarm();
   }
 
   // MARK: Messages
@@ -149,16 +220,27 @@ export class Lobby extends DurableObject<Env> {
     const next = apply(prev, action);
     if (next === prev) return;
     this.state = next;
-    void this.persist();
+    // Only people keep a lobby alive — bots and the server's own bookkeeping don't.
+    void this.persist(actor !== "server");
     this.broadcast();
 
     if (next.phase !== prev.phase) {
       this.bots.phaseChanged(next.phase);
       if (next.phase === "review") this.writeStarterQuests();
     }
-    if (action.type === "startGame" && next.endsAt) void this.ctx.storage.setAlarm(next.endsAt);
     if (action.type === "requestPhase" && next.transition) this.landTransition(next.transition);
+    if (action.type === "setAway" && action.away && action.playerId === next.hostId) this.handOffHostLater();
     this.topUpQuests();
+  }
+
+  /** If the host is still away after HOST_HANDOFF_MS, someone who's here takes over — so the game never stalls. */
+  private handOffHostLater() {
+    setTimeout(() => {
+      const s = this.state;
+      if (!s?.away?.includes(s.hostId)) return;
+      const heir = nextHost(s);
+      if (heir) this.dispatch({ type: "setHost", playerId: heir.id }, "server");
+    }, Number(this.env.HOST_HANDOFF_SECONDS) * 1000 || HOST_HANDOFF_MS);
   }
 
   /** After everyone's had the heads-up, make the requested phase change — unless the host called it off. */
@@ -194,8 +276,11 @@ export class Lobby extends DurableObject<Env> {
     }
   }
 
-  private async persist() {
-    if (this.state) await this.ctx.storage.put("state", this.state);
+  private async persist(touch = true) {
+    if (!this.state) return;
+    if (touch) this.lastActivity = Date.now();
+    await this.ctx.storage.put({ state: this.state, lastActivity: this.lastActivity });
+    await this.scheduleAlarm();
   }
 
   // MARK: AI quests
@@ -251,7 +336,6 @@ export class Lobby extends DurableObject<Env> {
       case "addTime":
         if (s.endsAt) {
           this.state = { ...s, endsAt: s.endsAt + op.seconds * 1000 };
-          void this.ctx.storage.setAlarm(this.state.endsAt!);
           void this.persist();
           this.broadcast();
         }

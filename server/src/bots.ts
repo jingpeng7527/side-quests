@@ -79,10 +79,18 @@ export class Bots {
     }
   }
 
+  /** Bots only play while at least one person is here to play with. */
+  private get anyoneHere(): boolean {
+    const s = this.lobby.state;
+    const away = new Set(s?.away ?? []);
+    return !!s?.players.some((p) => !p.isBot && !away.has(p.id));
+  }
+
   private play(bot: string) {
     this.after(10, 28, () => {
       const s = this.lobby.state;
       if (!s || s.phase !== "playing") return;
+      if (!this.anyoneHere) return this.play(bot);
       const quest = s.quests.find((q) => q.id === s.assignments[bot]);
       if (quest) {
         if (s.settings.allowSkips && Math.random() < 0.12) {
