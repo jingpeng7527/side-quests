@@ -8,6 +8,14 @@
     "bindings": [{ "name": "LOBBY", "class_name": "Lobby" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Lobby"] }],
+  // The web app (npm run web:build) is served from the same address as the game,
+  // so a join link works in any phone browser. /api/* goes to the game code;
+  // any other unknown path (e.g. /join/ABCD) falls back to the app.
+  "assets": {
+    "directory": "../app/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "side-quests-photos" }],
   // Dev shortcuts (bots via DEV menu, skip to end, seeding). Set to "0" in production.
   "vars": { "DEV_TOOLS": "1" }

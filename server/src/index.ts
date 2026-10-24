@@ -45,10 +45,21 @@ async function route(request: Request, env: Env): Promise<Response> {
     return stub.fetch("https://lobby/info");
   }
 
-  // POST /api/photos (image/jpeg body) -> { url }
+  // POST /api/photos — JSON { data: <base64 JPEG> } (what the app sends) or a raw image/jpeg body -> { url }
   if (parts[1] === "photos" && parts.length === 2 && request.method === "POST") {
+    let bytes: Uint8Array;
+    try {
+      bytes = request.headers.get("Content-Type")?.includes("json")
+        ? Uint8Array.from(atob(((await request.json()) as { data: string }).data), (c) => c.charCodeAt(0))
+        : new Uint8Array(await request.arrayBuffer());
+    } catch {
+      return new Response("expected { data: base64 }", { status: 400 });
+    }
+    // Refuse anything that isn't a JPEG, so a broken upload fails loudly instead of storing junk.
+    if (bytes.length < 100 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return new Response("not a JPEG", { status: 400 });
+    if (bytes.length > 8_000_000) return new Response("photo too large", { status: 413 });
     const key = `${crypto.randomUUID()}.jpg`;
-    await env.PHOTOS.put(key, request.body, { httpMetadata: { contentType: request.headers.get("Content-Type") ?? "image/jpeg" } });
+    await env.PHOTOS.put(key, bytes, { httpMetadata: { contentType: "image/jpeg" } });
     // Relative: each device prefixes the server address it can reach (localhost, 10.0.2.2, LAN IP…).
     return Response.json({ url: `/api/photos/${key}` });
   }

@@ -1,5 +1,5 @@
-import type { Action, GameState, ID, Player, Submission } from "./types";
-import { DEFAULT_SETTINGS } from "./types";
+import type { Action, GameState, ID, Phase, Player, Submission } from "./types";
+import { DEFAULT_SETTINGS, SUBMIT_GRACE_MS, TRANSITION_MS } from "./types";
 
 /** Who sent an action: a player id, or the server itself (bots, AI, clock). */
 export type Actor = ID | "server";
@@ -17,12 +17,16 @@ export function newGame(code: string, host: Player, opts: { aiMode: GameState["a
     skipsUsed: {},
     submissions: [],
     aiWriting: false,
+    ready: {},
+    away: [],
     ...opts,
   };
 }
 
-const HOST_ONLY = new Set<Action["type"]>(["setPhase", "updateSettings", "toggleQuest", "startGame"]);
-const SERVER_ONLY = new Set<Action["type"]>(["addAIQuests", "setAIWriting"]);
+// The host moves the game along with requestPhase; the server lands it (setPhase /
+// startGame) after everyone has had a few seconds' warning.
+const HOST_ONLY = new Set<Action["type"]>(["requestPhase", "cancelTransition", "updateSettings", "toggleQuest"]);
+const SERVER_ONLY = new Set<Action["type"]>(["addAIQuests", "setAIWriting", "setPhase", "startGame", "setAway"]);
 
 /** Whether `actor` may perform `action`. The server may do anything. */
 export function authorize(state: GameState, action: Action, actor: Actor): boolean {
@@ -34,6 +38,7 @@ export function authorize(state: GameState, action: Action, actor: Actor): boole
       return action.player.id === actor;
     case "leave":
     case "skip":
+    case "setReady":
       return action.playerId === actor;
     case "submit":
       return action.submission.playerId === actor;
@@ -71,8 +76,35 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
       return s;
 
     case "setPhase":
+      if (s.phase === action.phase) return prev;
       s.phase = action.phase;
+      s.ready = {};
+      delete s.transition;
       return s;
+
+    case "requestPhase":
+      if (s.phase === action.phase) return prev;
+      s.transition = { to: action.phase, at: now + TRANSITION_MS };
+      return s;
+
+    case "cancelTransition":
+      if (!s.transition) return prev;
+      delete s.transition;
+      return s;
+
+    case "setReady":
+      if (!!s.ready[action.playerId] === action.ready) return prev;
+      s.ready[action.playerId] = action.ready;
+      return s;
+
+    case "setAway": {
+      const away = new Set(s.away ?? []);
+      if (away.has(action.playerId) === action.away) return prev;
+      if (action.away) away.add(action.playerId);
+      else away.delete(action.playerId);
+      s.away = [...away];
+      return s;
+    }
 
     case "updateSettings":
       s.settings = action.settings;
@@ -113,12 +145,14 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
       s.history = {};
       s.skipsUsed = {};
       s.submissions = [];
+      s.ready = {};
+      delete s.transition;
       for (const p of shuffled(s.players, rand)) assignNext(s, p.id, rand);
       return s;
 
     case "submit": {
       const sub = action.submission;
-      if (s.phase !== "playing" || s.assignments[sub.playerId] !== sub.questId) return prev;
+      if (!acceptingProofs(s, sub.takenAt, now) || s.assignments[sub.playerId] !== sub.questId) return prev;
       s.submissions.push({ ...sub, votes: {} });
       (s.history[sub.playerId] ??= []).push(sub.questId);
       assignNext(s, sub.playerId, rand);
@@ -160,6 +194,36 @@ export function fillWaiting(s: GameState, rand: () => number = Math.random) {
   if (s.phase !== "playing") return;
   for (const p of s.players) if (!s.assignments[p.id]) assignNext(s, p.id, rand);
 }
+
+/**
+ * Proofs are accepted while playing, and — so a slow upload doesn't cost anyone a
+ * point — just after the buzzer for photos snapped before it.
+ */
+export function acceptingProofs(s: GameState, takenAt: number, now = Date.now()): boolean {
+  if (s.phase === "playing") return true;
+  return s.phase === "ended" && !!s.endsAt && takenAt <= s.endsAt && now <= s.endsAt + SUBMIT_GRACE_MS;
+}
+
+/** Players who've said they're done with this phase, and who's still going. */
+export function readiness(s: GameState): { ready: Player[]; waiting: Player[]; away: Player[] } {
+  const gone = new Set(s.away ?? []);
+  const here = s.players.filter((p) => !gone.has(p.id));
+  return {
+    ready: here.filter((p) => s.ready[p.id]),
+    waiting: here.filter((p) => !s.ready[p.id]),
+    away: s.players.filter((p) => gone.has(p.id)),
+  };
+}
+
+/** What the host's "move on" button leads to from each phase. */
+export const NEXT_PHASE: Partial<Record<Phase, Phase>> = {
+  lobby: "writing",
+  writing: "review",
+  review: "playing",
+  ended: "verifying",
+  verifying: "scoreboard",
+  scoreboard: "writing",
+};
 
 /** Quests not currently dealt that at least one player could still get. */
 export function freshQuestCount(s: GameState): number {

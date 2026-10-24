@@ -46,6 +46,11 @@ export class Lobby extends DurableObject<Env> {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
       this.state = (await ctx.storage.get<GameState>("state")) ?? null;
+      // Lobbies saved before these fields existed; and after a restart nobody is connected yet.
+      if (this.state) {
+        this.state.ready ??= {};
+        this.state.away = this.state.players.filter((p) => !p.isBot).map((p) => p.id);
+      }
     });
   }
 
@@ -74,8 +79,8 @@ export class Lobby extends DurableObject<Env> {
       const [client, server] = Object.values(new WebSocketPair());
       server.accept();
       server.addEventListener("message", (e) => this.onMessage(server, e.data as string));
-      server.addEventListener("close", () => this.sockets.delete(server));
-      server.addEventListener("error", () => this.sockets.delete(server));
+      server.addEventListener("close", () => this.dropSocket(server));
+      server.addEventListener("error", () => this.dropSocket(server));
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -103,6 +108,7 @@ export class Lobby extends DurableObject<Env> {
         this.sockets.set(ws, msg.player.id);
         if (msg.location) this.noteLocation(msg.player.id, msg.location);
         this.dispatch({ type: "join", player: msg.player }, msg.player.id);
+        this.dispatch({ type: "setAway", playerId: msg.player.id, away: false }, "server");
         this.send(ws, this.snapshot());
         return;
       case "location":
@@ -113,10 +119,19 @@ export class Lobby extends DurableObject<Env> {
         this.dispatch(msg.action, playerId, ws);
         return;
       case "dev":
-        if (!playerId || this.env.DEV_TOOLS !== "1") return;
+        // Dev shortcuts end games and add bots — host only, so a player can't yank everyone along.
+        if (!playerId || playerId !== this.state?.hostId || this.env.DEV_TOOLS !== "1") return;
         this.dev(msg.dev, playerId);
         return;
     }
+  }
+
+  /** When a player's last connection closes, mark them away so nobody waits on them. */
+  private dropSocket(ws: WebSocket) {
+    const playerId = this.sockets.get(ws);
+    this.sockets.delete(ws);
+    if (!playerId || [...this.sockets.values()].includes(playerId)) return;
+    if (this.state?.players.some((p) => p.id === playerId)) this.dispatch({ type: "setAway", playerId, away: true }, "server");
   }
 
   private noteLocation(playerId: string, location: Coordinate) {
@@ -142,7 +157,18 @@ export class Lobby extends DurableObject<Env> {
       if (next.phase === "review") this.writeStarterQuests();
     }
     if (action.type === "startGame" && next.endsAt) void this.ctx.storage.setAlarm(next.endsAt);
+    if (action.type === "requestPhase" && next.transition) this.landTransition(next.transition);
     this.topUpQuests();
+  }
+
+  /** After everyone's had the heads-up, make the requested phase change — unless the host called it off. */
+  private landTransition(t: NonNullable<GameState["transition"]>) {
+    setTimeout(() => {
+      const s = this.state;
+      if (!s?.transition || s.transition.at !== t.at || s.transition.to !== t.to) return;
+      if (t.to === "playing" && s.phase === "review") this.dispatch({ type: "startGame" }, "server");
+      else this.dispatch({ type: "setPhase", phase: t.to }, "server");
+    }, Math.max(0, t.at - Date.now()));
   }
 
   private snapshot(): ServerMessage {

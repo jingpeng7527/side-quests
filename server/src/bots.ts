@@ -58,6 +58,8 @@ export class Bots {
 
   private writeQuests(bot: string) {
     const n = 2 + Math.floor(Math.random() * 2);
+    // Bots say they're done once they've written their quests.
+    this.after(8, 10, () => this.lobby.dispatch({ type: "setReady", playerId: bot, ready: true }, "server"));
     for (let i = 0; i < n; i++) {
       this.after(1.5, 7, () => {
         const s = this.lobby.state;
@@ -112,6 +114,7 @@ export class Bots {
   }
 
   private vote(bot: string) {
+    this.after(7, 9, () => this.lobby.dispatch({ type: "setReady", playerId: bot, ready: true }, "server"));
     for (const sub of this.lobby.state?.submissions ?? []) {
       if (sub.playerId === bot) continue;
       this.after(1, 6, () =>
