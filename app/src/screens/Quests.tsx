@@ -125,7 +125,7 @@ export function QuestsScreen() {
           <SectionHead title="AI" count={state.settings.aiStarterCount} />
           <Body size={15} color={color.stone}>
             {state.settings.aiRefill
-              ? `${state.aiMode === "claude" ? "Claude" : "The offline deck"} reads the vibe of your quests and adds ${state.settings.aiStarterCount} — plus more whenever the deck runs dry mid-game.`
+              ? `${state.aiMode === "ai" ? "AI" : "The offline deck"} reads the vibe of your quests and adds ${state.settings.aiStarterCount} — plus more whenever the deck runs dry mid-game.`
               : `Adds ${state.settings.aiStarterCount} quests in your vibe. Mid-game refills are off.`}
           </Body>
           {isHost && (
@@ -382,7 +382,7 @@ export function ReviewScreen() {
           ))}
           {state.aiWriting && (
             <Label size={11} style={{ paddingVertical: space.m }}>
-              {state.aiMode === "claude" ? "Claude is writing in your vibe…" : "Dealing from the offline deck…"}
+              {state.aiMode === "ai" ? "AI is writing in your vibe…" : "Dealing from the offline deck…"}
             </Label>
           )}
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingVertical: space.m }}>

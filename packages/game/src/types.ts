@@ -108,8 +108,8 @@ export interface GameState {
   ready: Record<ID, boolean>;
   /** A host-requested phase change, announced to everyone a few seconds before it happens. */
   transition?: { to: Phase; at: number };
-  /** Whether quest generation is backed by Claude or the offline deck. */
-  aiMode: "claude" | "offline";
+  /** Whether quest generation is backed by an AI model or the offline deck. */
+  aiMode: "ai" | "offline";
   /** Whether the server allows dev shortcuts. */
   devTools: boolean;
 }

@@ -1,37 +1,47 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-const SYSTEM = `You write side quests for a party game played in person by a group of friends. \
+/** Fast and inexpensive for short creative lists; override with OPENAI_MODEL. */
+export const DEFAULT_MODEL = "gpt-5.4-mini";
+
+const INSTRUCTIONS = `You write side quests for a party game played in person by a group of friends. \
 Each quest is a short, concrete dare or mission a player can complete in a few minutes \
 and prove with a single photo. Match the group's vibe — their humor, boldness, setting \
 and level of chaos — as shown by the quests they wrote themselves. Keep quests legal, \
 safe, and kind to strangers. Each quest is one sentence, under 90 characters, \
 imperative voice, no numbering or emoji.`;
 
+const SCHEMA = {
+  type: "object",
+  properties: { quests: { type: "array", items: { type: "string" } } },
+  required: ["quests"],
+  additionalProperties: false,
+} as const;
+
 /**
- * Writes `count` new quests in the vibe of the group's own. Uses Claude when
- * an API key is configured; otherwise (or on any failure) the offline deck.
+ * Writes `count` new quests in the vibe of the group's own. Uses OpenAI when an
+ * API key is configured; otherwise (or on any failure) the offline deck.
  */
 export async function writeQuests(
-  apiKey: string | undefined,
+  ai: { apiKey?: string; model?: string },
   count: number,
   examples: string[],
   avoiding: string[],
 ): Promise<string[]> {
-  if (apiKey) {
+  if (ai.apiKey) {
     try {
-      const quests = await askClaude(new Anthropic({ apiKey }), count, examples, avoiding);
+      const quests = await askOpenAI(new OpenAI({ apiKey: ai.apiKey }), ai.model || DEFAULT_MODEL, count, examples, avoiding);
       if (quests.length) return quests;
     } catch (error) {
-      if (error instanceof Anthropic.AuthenticationError) console.error("Claude: invalid API key");
-      else if (error instanceof Anthropic.RateLimitError) console.error("Claude: rate limited");
-      else if (error instanceof Anthropic.APIError) console.error(`Claude API error ${error.status}: ${error.message}`);
-      else console.error("Claude quest generation failed:", error);
+      if (error instanceof OpenAI.AuthenticationError) console.error("OpenAI: invalid API key");
+      else if (error instanceof OpenAI.RateLimitError) console.error("OpenAI: rate limited or out of credit");
+      else if (error instanceof OpenAI.APIError) console.error(`OpenAI API error ${error.status}: ${error.message}`);
+      else console.error("AI quest generation failed:", error);
     }
   }
   return offlineQuests(count, [...examples, ...avoiding]);
 }
 
-async function askClaude(client: Anthropic, count: number, examples: string[], avoiding: string[]) {
+async function askOpenAI(client: OpenAI, model: string, count: number, examples: string[], avoiding: string[]) {
   const exampleList = examples.length
     ? examples.map((q) => `- ${q}`).join("\n")
     : "(The group hasn't written any yet — go for playful, low-stakes chaos.)";
@@ -39,34 +49,20 @@ async function askClaude(client: Anthropic, count: number, examples: string[], a
     ? `\n\nAlready in play (don't repeat or closely paraphrase):\n${avoiding.map((q) => `- ${q}`).join("\n")}`
     : "";
 
-  const response = await client.beta.messages.create({
-    model: "claude-opus-5-5",
-    max_tokens: 16000,
-    system: SYSTEM,
-    messages: [
-      { role: "user", content: `Quests this group wrote:\n${exampleList}${avoidList}\n\nWrite ${count} new quests in the same vibe.` },
-    ],
-    // Re-run on Anthropic's recommended fallback model if a safety classifier declines.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: {
-      effort: "medium",
-      format: {
-        type: "json_schema",
-        schema: {
-          type: "object",
-          properties: { quests: { type: "array", items: { type: "string" } } },
-          required: ["quests"],
-          additionalProperties: false,
-        },
-      },
-    },
+  const response = await client.responses.create({
+    model,
+    instructions: INSTRUCTIONS,
+    input: `Quests this group wrote:\n${exampleList}${avoidList}\n\nWrite ${count} new quests in the same vibe.`,
+    // Reasoning models (gpt-5.x, o-series) think briefly; a short list doesn't need more.
+    ...(/^(gpt-5|gpt-6|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {}),
+    text: { format: { type: "json_schema", name: "side_quests", strict: true, schema: SCHEMA } },
+    max_output_tokens: 4000,
+    // Party chatter doesn't need to be kept on OpenAI's side.
+    store: false,
   });
 
-  if (response.stop_reason === "refusal") return [];
-  const text = response.content.find((b) => b.type === "text");
-  if (!text || text.type !== "text") return [];
-  const { quests } = JSON.parse(text.text) as { quests: string[] };
+  // A refusal or truncation leaves no valid JSON; the caller falls back to the offline deck.
+  const { quests } = JSON.parse(response.output_text) as { quests: string[] };
   return quests.map((q) => q.trim()).filter(Boolean).slice(0, count);
 }
 

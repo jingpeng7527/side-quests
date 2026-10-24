@@ -26,7 +26,10 @@ import { writeQuests } from "./quests";
 
 export interface Env {
   LOBBY: DurableObjectNamespace<Lobby>;
-  ANTHROPIC_API_KEY?: string;
+  /** Enables AI-written quests (server/.env locally; `wrangler secret put OPENAI_API_KEY` deployed). */
+  OPENAI_API_KEY?: string;
+  /** Optional: which OpenAI model writes quests (default in quests.ts). */
+  OPENAI_MODEL?: string;
   DEV_TOOLS?: string;
   /** Overrides for testing: how long a quiet lobby lives, and how long before an away host is replaced. */
   LOBBY_TTL_SECONDS?: string;
@@ -69,7 +72,7 @@ export class Lobby extends DurableObject<Env> {
       if (this.state) return new Response("taken", { status: 409 });
       const { code, host } = (await request.json()) as { code: string; host: Player };
       this.state = newGame(code, host, {
-        aiMode: this.env.ANTHROPIC_API_KEY ? "claude" : "offline",
+        aiMode: this.env.OPENAI_API_KEY ? "ai" : "offline",
         devTools: this.env.DEV_TOOLS === "1",
       });
       await this.persist();
@@ -308,7 +311,7 @@ export class Lobby extends DurableObject<Env> {
     const human = s.quests.filter((q) => q.source === "human").map((q) => q.text);
     const all = s.quests.map((q) => q.text);
     this.ctx.waitUntil(
-      writeQuests(this.env.ANTHROPIC_API_KEY, count, human, all).then((texts) => {
+      writeQuests({ apiKey: this.env.OPENAI_API_KEY, model: this.env.OPENAI_MODEL }, count, human, all).then((texts) => {
         const quests: Quest[] = texts.map((text) => ({ id: crypto.randomUUID(), text, authorId: null, source: "ai", included: true }));
         const before = this.state?.quests.length ?? 0;
         // Back off first: otherwise an empty result would trigger the next top-up immediately, forever.

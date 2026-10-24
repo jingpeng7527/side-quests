@@ -11,7 +11,7 @@ Runs on **iOS, Android and the web** from one codebase.
 ```
 packages/game/   Shared TypeScript: types, game rules, wire protocol, places (+ tests)
 server/          Cloudflare Worker — one Durable Object per lobby, photos stored with each lobby,
-                 Claude quest writer, walking directions, bots, dev shortcuts
+                 AI quest writer (OpenAI), walking directions, bots, dev shortcuts
 app/             Expo (React Native + expo-router) app for iOS, Android and web
 legacy-swiftui/  The original SwiftUI prototype, kept as a reference
 ```
@@ -36,7 +36,7 @@ Run Expo from `app/` (that's what `npm run app` does). Running `npx expo start` 
 
 The app finds the server on the same machine that serves the JS bundle, so simulators, emulators and real phones on the same Wi-Fi all just work. To point it elsewhere, set `EXPO_PUBLIC_SERVER_URL`.
 
-**AI quests:** copy `server/.dev.vars.example` to `server/.dev.vars` and add an Anthropic API key. Without one, a built-in offline deck fills in. The key lives only on the server.
+**AI quests:** copy `server/.env.example` to `server/.env` and add an OpenAI API key (`OPENAI_API_KEY`). Optionally set `OPENAI_MODEL` (default `gpt-5.4-mini`). Without a key, a built-in offline deck fills in. The key lives only on the server.
 
 **Joining:** the host's lobby screen shows a QR code and a four-letter code. Friends tap **Join a lobby** and scan it, or type the letters — from the app or a browser.
 
@@ -71,7 +71,7 @@ cd server && npx wrangler login && cd ..    # once
 npm run deploy                              # builds the web app, deploys with DEV_TOOLS off
 ```
 
-It prints your permanent address, `https://side-quests.<your-subdomain>.workers.dev`. Lobbies and their photos live in Durable Object storage (free tier) and are deleted after 24 quiet hours. Nothing else to set up. For Claude-written quests: `cd server && npx wrangler secret put ANTHROPIC_API_KEY`.
+It prints your permanent address, `https://side-quests.<your-subdomain>.workers.dev`. Lobbies and their photos live in Durable Object storage (free tier) and are deleted after 24 quiet hours. Nothing else to set up. For AI-written quests: `cd server && npx wrangler secret put OPENAI_API_KEY`.
 
 **App:** see [docs/run-on-a-phone.md](docs/run-on-a-phone.md) for installable Android and iPhone builds (EAS), TestFlight, and store release.
 

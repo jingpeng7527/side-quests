@@ -55,7 +55,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return route ? Response.json(route) : new Response("no route", { status: 502 });
   }
 
-  if (parts[1] === "health") return Response.json({ ok: true, ai: env.ANTHROPIC_API_KEY ? "claude" : "offline" });
+  if (parts[1] === "health") return Response.json({ ok: true, ai: env.OPENAI_API_KEY ? "ai" : "offline" });
   return new Response("not found", { status: 404 });
 }
 

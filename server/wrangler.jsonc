@@ -18,5 +18,5 @@
   },
   // Dev shortcuts (bots via DEV menu, skip to end, seeding). Set to "0" in production.
   "vars": { "DEV_TOOLS": "1" }
-  // ANTHROPIC_API_KEY is a secret: `wrangler secret put ANTHROPIC_API_KEY`, or .dev.vars locally.
+  // OPENAI_API_KEY is a secret: `wrangler secret put OPENAI_API_KEY` when deployed, server/.env locally.
 }

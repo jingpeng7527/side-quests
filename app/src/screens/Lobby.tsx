@@ -174,7 +174,7 @@ export function GameSettingsSheet({ visible, onClose }: { visible: boolean; onCl
           <Hairline />
           <ToggleRow title="AI refills" detail="Write new quests when the deck runs dry" value={s.aiRefill} onChange={(v) => update({ aiRefill: v })} />
           <Stepper label="AI starter quests" value={s.aiStarterCount} min={0} max={10} onChange={(v) => update({ aiStarterCount: v })} />
-          <Label size={11}>{state.aiMode === "claude" ? "Quest writer: Claude" : "Quest writer: offline deck (no API key on the server)"}</Label>
+          <Label size={11}>{state.aiMode === "ai" ? "Quest writer: AI" : "Quest writer: offline deck (no API key on the server)"}</Label>
         </ScrollView>
       </Screen>
     </Modal>

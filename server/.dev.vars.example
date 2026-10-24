@@ -1,3 +1,0 @@
-# Copy to .dev.vars for local development (wrangler dev reads it). Never commit .dev.vars.
-# With a key, AI quests come from Claude; without one, the offline deck fills in.
-ANTHROPIC_API_KEY=sk-ant-...

@@ -94,7 +94,7 @@ You need a free Cloudflare account.
 ```sh
 cd server && npx wrangler login && cd ..
 npm run deploy
-npx wrangler secret put ANTHROPIC_API_KEY --cwd server   # optional: enables Claude-written quests
+npx wrangler secret put OPENAI_API_KEY --cwd server   # optional: enables AI-written quests
 ```
 
 `deploy` builds the web app, deploys it with the game server, and prints the address, like `https://side-quests.<your-subdomain>.workers.dev`. Check it with `curl <url>/api/health`. The DEV menu (bots, skip to end) is off in deployed builds and on in local development.
