@@ -1,17 +1,73 @@
-import { DEFAULT_LOCATION, PLACE_RADIUS_OPTIONS, distance, formatDistance, type Coordinate, type QuestPlace } from "@side-quests/game";
-import * as Location from "expo-location";
+import Feather from "@expo/vector-icons/Feather";
+import { DEFAULT_LOCATION, PLACE_RADIUS_OPTIONS, distance, formatDistance, readiness, type Coordinate, type GameState, type Quest, type QuestPlace } from "@side-quests/game";
 import { useEffect, useRef, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from "react-native";
+import { searchPlaces, nameSpot, type PlaceHit } from "../lib/geo";
 import { newId, useGame } from "../lib/session";
 import { DevMenu } from "../ui/DevMenu";
 import { HostAdvance, HostWaitingBar, ReadyToggle } from "../ui/flow";
-import { Avatar, Body, Display, Hairline, Label, Screen, SlabButton, Tag, color, font, space, usePalette } from "../ui/kit";
-import { PickerMap, mapsSupportPicking } from "../ui/maps";
-import { GameSettingsSheet, SettingsSummary, Stepper } from "./Lobby";
+import { Avatar, Body, Button, Card, Display, IconButton, Label, Screen, SectionLabel, Tag, color, font, radius, space, usePalette } from "../ui/kit";
+import { PickerMap } from "../ui/maps";
+import { GameSettingsSheet } from "./Lobby";
+
+const MAX_QUEST = 100;
+
+/** "3 of 4 done ● ● ● ○" */
+function DoneDots({ state }: { state: GameState }) {
+  const { ready, waiting } = readiness(state);
+  const total = ready.length + waiting.length;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <Body medium>
+        {ready.length} of {total} done
+      </Body>
+      <View style={{ flexDirection: "row", gap: 6 }} accessibilityElementsHidden>
+        {Array.from({ length: Math.min(total, 10) }, (_, i) => (
+          <View key={i} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: i < ready.length ? color.signalRed : "transparent", borderWidth: 2, borderColor: i < ready.length ? color.signalRed : color.paperLine }} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** One quest in a list: author avatar, text (or sealed), byline. */
+function QuestCard({ quest, state, mine, onRemove }: { quest: Quest; state: GameState; mine: boolean; onRemove?: () => void }) {
+  const author = state.players.find((p) => p.id === quest.authorId);
+  return (
+    <Card style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingVertical: 12 }}>
+      {quest.source === "ai" ? (
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: color.inkBlack, alignItems: "center", justifyContent: "center" }}>
+          <Feather name="zap" size={18} color={color.paperBright} />
+        </View>
+      ) : (
+        <Avatar name={author?.name ?? "?"} bot={author?.isBot} />
+      )}
+      <View style={{ flex: 1, gap: 4 }}>
+        {mine ? (
+          <Body size={14}>{quest.text}</Body>
+        ) : (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Feather name="lock" size={13} color={color.stone} />
+            <Body size={14} color={color.stone}>
+              {"Sealed until it's dealt"}
+            </Body>
+          </View>
+        )}
+        {mine && quest.place && <PlaceChip place={quest.place} />}
+        <Label size={10}>{quest.source === "ai" ? "AI" : author?.name ?? "—"}</Label>
+      </View>
+      {onRemove ? (
+        <IconButton icon="x" label="Remove quest" onPress={onRemove} />
+      ) : (
+        <Feather name="check" size={20} color={color.signalRed} />
+      )}
+    </Card>
+  );
+}
 
 /**
  * Everyone writes quests. Yours are visible; others' stay sealed so they can
- * surprise you; the AI section previews how many it'll add.
+ * surprise you.
  */
 export function QuestsScreen() {
   const { state, me, isHost, send } = useGame();
@@ -21,9 +77,8 @@ export function QuestsScreen() {
   const [editing, setEditing] = useState(false);
   const [focused, setFocused] = useState(false);
 
-  const mine = state.quests.filter((q) => q.authorId === me.id);
-  const shared = state.quests.filter((q) => q.source === "human" && q.authorId !== me.id);
-  const others = state.players.filter((p) => p.id !== me.id);
+  const submitted = [...state.quests].reverse().filter((q) => q.source === "human");
+  const ai = state.quests.filter((q) => q.source === "ai").length;
 
   const add = () => {
     const text = draft.trim();
@@ -48,98 +103,76 @@ export function QuestsScreen() {
 
   return (
     <Screen
-      index="02"
       title="Write quests"
-      trailing={`${state.quests.length} total`}
-      accessory={<DevMenu />}
+      right={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <DevMenu />
+          {isHost && <IconButton icon="sliders" label="Game settings" onPress={() => setEditing(true)} />}
+        </View>
+      }
       footer={
         isHost ? (
           <HostAdvance title="Review deck" waitingVerb="writing" disabled={!state.quests.length && !state.settings.aiStarterCount} />
         ) : (
-          <ReadyToggle doneLabel="I'm done writing" notDoneLabel="Keep writing" />
+          <ReadyToggle label="I'm done" />
         )
       }
     >
-      <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, gap: space.xl, paddingBottom: space.l }} keyboardDismissMode="interactive">
-        {/* YOURS */}
-        <View style={{ gap: space.m }}>
-          <SectionHead title="Yours" count={mine.length} />
-          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: space.s }}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Get a stranger to…"
-              placeholderTextColor="rgba(107,100,94,0.6)"
-              multiline
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onSubmitEditing={add}
-              submitBehavior="blurAndSubmit"
-              returnKeyType="done"
-              style={{ flex: 1, fontFamily: font.display, fontSize: 30, color: color.inkBlack, paddingVertical: 4 }}
-            />
-            <IconSlab glyph="⌖" active={!!draftPlace} label={draftPlace ? "Change place" : "Set a place"} onPress={() => setPicking(true)} />
-            <IconSlab glyph="+" filled label="Add quest" disabled={!draft.trim()} onPress={add} />
-          </View>
-          <Hairline emphasized={focused} />
-          {draftPlace ? (
-            <PlaceChip place={draftPlace} onRemove={() => setDraftPlace(undefined)} />
-          ) : (
-            <Body size={13} color={color.stone}>
-              Tap ⌖ to make it happen somewhere specific.
-            </Body>
-          )}
-          {mine.map((q) => (
-            <View key={q.id} style={{ flexDirection: "row", gap: space.s }}>
-              <View style={{ flex: 1, gap: 6 }}>
-                <Body>{q.text}</Body>
-                {q.place && <PlaceChip place={q.place} />}
-              </View>
-              <Pressable onPress={() => send({ type: "removeQuest", questId: q.id })} accessibilityLabel="Remove quest" hitSlop={10}>
-                <Label size={14}>✕</Label>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, gap: space.l, paddingBottom: space.l }} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
+        <DoneDots state={state} />
+
+        {/* Composer */}
+        <Card style={{ gap: space.s, borderColor: focused ? color.signalRed : color.paperLine }}>
+          <TextInput
+            value={draft}
+            onChangeText={(t) => setDraft(t.slice(0, MAX_QUEST))}
+            placeholder="Write a side quest…"
+            placeholderTextColor={color.stone}
+            multiline
+            maxLength={MAX_QUEST}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onSubmitEditing={add}
+            submitBehavior="blurAndSubmit"
+            returnKeyType="done"
+            accessibilityLabel="New quest"
+            style={{ fontFamily: font.body, fontSize: 16, lineHeight: 23, color: color.inkBlack, minHeight: 72, textAlignVertical: "top" }}
+          />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
+            {draftPlace ? (
+              <PlaceChip place={draftPlace} onRemove={() => setDraftPlace(undefined)} />
+            ) : (
+              <Pressable onPress={() => setPicking(true)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 }}>
+                <Feather name="map-pin" size={15} color={color.signalRed} />
+                <Label size={11} bold color={color.signalRed}>
+                  Add a place
+                </Label>
               </Pressable>
-            </View>
+            )}
+            <View style={{ flex: 1 }} />
+            <Label size={11}>
+              {draft.length}/{MAX_QUEST}
+            </Label>
+            <Button title="Add" size="md" icon="plus" disabled={!draft.trim()} onPress={add} style={{ paddingHorizontal: space.m, minHeight: 40 }} />
+          </View>
+        </Card>
+
+        <View style={{ gap: space.s }}>
+          <SectionLabel>Submitted quests ({submitted.length})</SectionLabel>
+          {!submitted.length && <Body color={color.stone}>Nothing yet. Write the first one.</Body>}
+          {submitted.map((q) => (
+            <QuestCard key={q.id} quest={q} state={state} mine={q.authorId === me.id} onRemove={q.authorId === me.id ? () => send({ type: "removeQuest", questId: q.id }) : undefined} />
           ))}
         </View>
 
-        {/* SHARED */}
-        <View style={{ gap: space.m }}>
-          <SectionHead title="Shared" count={shared.length} />
-          {!others.length && <Body color={color.stone}>Nobody else here yet.</Body>}
-          {others.map((p) => (
-            <View key={p.id} style={{ flexDirection: "row", alignItems: "center", gap: space.m }}>
-              <Avatar name={p.name} size={28} />
-              <Body weight="600" style={{ flex: 1 }}>
-                {p.name}
-              </Body>
-              <SealedStack count={shared.filter((q) => q.authorId === p.id).length} />
-            </View>
-          ))}
-          <Body size={13} color={color.stone}>
-            {"Sealed — you'll only see these if you're dealt one."}
+        <Card style={{ flexDirection: "row", alignItems: "center", gap: space.m, backgroundColor: color.paperRaised, borderColor: "transparent" }}>
+          <Feather name="zap" size={20} color={color.signalRed} />
+          <Body size={13} style={{ flex: 1 }}>
+            {state.settings.aiStarterCount > 0
+              ? `${state.aiMode === "ai" ? "AI" : "The offline deck"} adds ${Math.max(0, state.settings.aiStarterCount - ai)} more in your group's vibe${state.settings.aiRefill ? ", and tops up the deck mid-game" : ""}.`
+              : "AI starter quests are off."}
           </Body>
-        </View>
-
-        {/* AI */}
-        <View style={{ gap: space.m }}>
-          <SectionHead title="AI" count={state.settings.aiStarterCount} />
-          <Body size={15} color={color.stone}>
-            {state.settings.aiRefill
-              ? `${state.aiMode === "ai" ? "AI" : "The offline deck"} reads the vibe of your quests and adds ${state.settings.aiStarterCount} — plus more whenever the deck runs dry mid-game.`
-              : `Adds ${state.settings.aiStarterCount} quests in your vibe. Mid-game refills are off.`}
-          </Body>
-          {isHost && (
-            <Stepper
-              label="Starter quests"
-              value={state.settings.aiStarterCount}
-              min={0}
-              max={10}
-              onChange={(v) => send({ type: "updateSettings", settings: { ...state.settings, aiStarterCount: v } })}
-            />
-          )}
-        </View>
-
-        {isHost && <SettingsSummary settings={state.settings} editable onEdit={() => setEditing(true)} />}
+        </Card>
       </ScrollView>
       <GameSettingsSheet visible={editing} onClose={() => setEditing(false)} />
       <PlacePicker
@@ -153,75 +186,19 @@ export function QuestsScreen() {
   );
 }
 
-function IconSlab({ glyph, label, onPress, filled, active, disabled }: { glyph: string; label: string; onPress: () => void; filled?: boolean; active?: boolean; disabled?: boolean }) {
-  const bg = filled ? color.signalRed : active ? color.inkBlack : "transparent";
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityLabel={label}
-      style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center", backgroundColor: bg, borderWidth: 2, borderColor: filled ? color.signalRed : color.inkBlack, opacity: disabled ? 0.4 : 1 }}
-    >
-      <Display size={30} color={filled || active ? color.paperBright : color.inkBlack} style={{ lineHeight: 34 }}>
-        {glyph}
-      </Display>
-    </Pressable>
-  );
-}
-
-export function SectionHead({ title, count }: { title: string; count: number }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "baseline", gap: space.s }}>
-      <Display size={48}>{title}</Display>
-      <Label color={color.signalRed} style={{ fontFamily: font.monoBold }}>
-        {String(count).padStart(2, "0")}
-      </Label>
-    </View>
-  );
-}
-
-/** A fanned stack of face-down cards. */
-function SealedStack({ count }: { count: number }) {
-  return (
-    <View style={{ width: 64, height: 34, flexDirection: "row", alignItems: "center" }} accessibilityLabel={`${count} sealed quests`}>
-      {count === 0 && <Label>—</Label>}
-      {Array.from({ length: Math.min(count, 4) }, (_, i) => (
-        <View
-          key={i}
-          style={{
-            position: "absolute",
-            left: i * 5,
-            width: 22,
-            height: 30,
-            backgroundColor: color.paperRaised,
-            borderWidth: 1,
-            borderColor: color.paperLine,
-            transform: [{ rotate: `${i * 7 - 7}deg` }],
-          }}
-        />
-      ))}
-      {count > 0 && (
-        <Label color={color.signalRed} style={{ position: "absolute", right: 0 }}>
-          {count}
-        </Label>
-      )}
-    </View>
-  );
-}
-
-/** "⌖ HAYES VALLEY · 250 M" — shown wherever a quest has a place. */
+/** "📍 HAYES VALLEY · 250 M" — shown wherever a quest has a place. */
 export function PlaceChip({ place, onRemove }: { place: QuestPlace; onRemove?: () => void }) {
   const pal = usePalette();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1.5, borderColor: pal.accent }}>
-      <Label size={11} color={pal.accent} numberOfLines={1}>
-        ⌖ {place.name} <Label size={11}>· {place.radius} m</Label>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, borderWidth: 1.5, borderColor: pal.accent, maxWidth: "100%" }}>
+      <Feather name="map-pin" size={12} color={pal.accent} />
+      <Label size={11} bold color={pal.accent} numberOfLines={1} style={{ flexShrink: 1 }}>
+        {place.name}
       </Label>
+      <Label size={11}>· {place.radius} m</Label>
       {onRemove && (
         <Pressable onPress={onRemove} accessibilityLabel="Remove place" hitSlop={10}>
-          <Label size={11} color={pal.accent}>
-            ✕
-          </Label>
+          <Feather name="x" size={13} color={pal.accent} />
         </Pressable>
       )}
     </View>
@@ -233,26 +210,38 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
   const { location } = useGame();
   const [pin, setPin] = useState<Coordinate | null>(null);
   const [name, setName] = useState("");
-  const [radius, setRadius] = useState(100);
+  const [named, setNamed] = useState(false); // did the player type a name themselves?
+  const [radiusM, setRadius] = useState(100);
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PlaceHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const center = location ?? DEFAULT_LOCATION;
 
-  const drop = (c: Coordinate, label: string) => {
+  const drop = async (c: Coordinate, label?: string) => {
     setPin(c);
-    setName(label);
+    setResults(null);
+    if (label) {
+      setName(label);
+      return;
+    }
+    if (!named) setName("Dropped pin");
+    const spot = await nameSpot(c);
+    if (spot && !named) setName(spot);
   };
 
   const search = async () => {
+    if (!query.trim()) return;
     setSearchError(null);
+    setSearching(true);
     try {
-      const hits = await Location.geocodeAsync(query);
-      if (!hits.length) return setSearchError("No match — try a street or landmark, or tap the map.");
-      // Prefer the closest hit to the player.
-      const best = hits.sort((a, b) => distance(center, a) - distance(center, b))[0];
-      drop({ latitude: best.latitude, longitude: best.longitude }, query.trim());
+      const hits = await searchPlaces(query.trim(), location);
+      setResults(hits);
+      if (!hits.length) setSearchError("No match nearby — try another name, or tap the map.");
     } catch {
-      setSearchError("Search isn't available here — tap the map instead.");
+      setSearchError("Search isn't working right now — tap the map instead.");
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -260,78 +249,98 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
     onDone(p);
     setPin(null);
     setName("");
+    setNamed(false);
     setQuery("");
+    setResults(null);
+    setSearchError(null);
   };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => close()}>
       <Screen
-        index="⌖"
         title="Set a place"
+        left={{ icon: "x", onPress: () => close(), label: "Cancel" }}
         footer={
-          <>
-            <SlabButton
-              title={pin ? "Pin it here" : mapsSupportPicking ? "Tap the map to drop a pin" : "Use my spot to pin it"}
-              disabled={!pin}
-              onPress={() => pin && close({ name: name.trim() || "Pinned spot", coordinate: pin, radius })}
-            />
-            <SlabButton title="Cancel" kind="quiet" onPress={() => close()} />
-          </>
+          <Button
+            title={pin ? "Pin it here" : "Tap the map to drop a pin"}
+            icon="map-pin"
+            disabled={!pin}
+            onPress={() => pin && close({ name: name.trim() || "Pinned spot", coordinate: pin, radius: radiusM })}
+          />
         }
       >
         <View style={{ flex: 1, paddingHorizontal: space.gutter, gap: space.m }}>
-          {Platform.OS !== "web" && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, paddingHorizontal: space.m, backgroundColor: color.paperRaised }}>
-              <Label>⌕</Label>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={search}
-                returnKeyType="search"
-                placeholder="Search a street or landmark"
-                placeholderTextColor={color.stone}
-                autoCorrect={false}
-                style={{ flex: 1, fontSize: 17, fontWeight: "500", color: color.inkBlack, paddingVertical: 14 }}
-              />
-            </View>
-          )}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, paddingHorizontal: space.m, backgroundColor: color.paperBright, borderRadius: radius.pill, borderWidth: 1.5, borderColor: color.paperLine }}>
+            <Feather name="search" size={18} color={color.stone} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={search}
+              returnKeyType="search"
+              placeholder="Search a café, park, street…"
+              placeholderTextColor={color.stone}
+              autoCorrect={false}
+              accessibilityLabel="Search places"
+              style={{ flex: 1, fontFamily: font.body, fontSize: 16, color: color.inkBlack, paddingVertical: 13 }}
+            />
+            {searching && <ActivityIndicator color={color.signalRed} />}
+          </View>
           {searchError && <Body size={13} color={color.signalRed}>{searchError}</Body>}
-          <View style={{ flex: 1, minHeight: 220, borderWidth: 2, borderColor: color.inkBlack }}>
-            <PickerMap style={{ flex: 1 }} center={center} pin={pin} radius={radius} onPick={(c) => drop(c, name || "Dropped pin")} />
+
+          <View style={{ flex: 1, minHeight: 220, borderRadius: radius.card, overflow: "hidden", borderWidth: 2, borderColor: color.inkBlack }}>
+            <PickerMap style={{ flex: 1 }} center={center} pin={pin} radius={radiusM} onPick={(c) => void drop(c)} />
+            {results && results.length > 0 && (
+              <ScrollView style={{ position: "absolute", left: 8, right: 8, top: 8, maxHeight: 220, backgroundColor: color.paperBright, borderRadius: radius.field }} keyboardShouldPersistTaps="handled">
+                {results.map((hit, i) => (
+                  <Pressable key={i} onPress={() => void drop(hit, hit.name)} style={{ padding: space.m, borderTopWidth: i ? 1 : 0, borderColor: color.paperLine }}>
+                    <Body size={14} medium numberOfLines={1}>
+                      {hit.name}
+                    </Body>
+                    <Label size={10} numberOfLines={1}>
+                      {[location ? formatDistance(distance(location, hit)) : null, hit.detail].filter(Boolean).join(" · ")}
+                    </Label>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
           </View>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Label size={11}>Counts as there within</Label>
-            <Pressable disabled={!location} onPress={() => location && drop(location, "Right here")}>
-              <Label size={11} color={color.signalRed}>
-                Use my spot
-              </Label>
-            </Pressable>
-          </View>
-          <View style={{ flexDirection: "row" }}>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
+            <Label size={11} style={{ flex: 1 }}>
+              Counts as there within
+            </Label>
             {PLACE_RADIUS_OPTIONS.map((r) => (
               <Pressable
                 key={r}
                 onPress={() => setRadius(r)}
-                style={{ flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", backgroundColor: radius === r ? color.signalRed : "transparent", borderWidth: 1, borderColor: color.paperLine }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: radiusM === r }}
+                style={{ minHeight: 36, paddingHorizontal: 12, justifyContent: "center", borderRadius: radius.pill, backgroundColor: radiusM === r ? color.signalRed : "transparent", borderWidth: 1.5, borderColor: radiusM === r ? color.signalRed : color.paperLine }}
               >
-                <Display size={22} color={radius === r ? color.paperBright : color.inkBlack}>
+                <Label size={11} bold color={radiusM === r ? color.paperBright : color.inkBlack}>
                   {r} m
-                </Display>
+                </Label>
               </Pressable>
             ))}
           </View>
-          {pin && (
+
+          {pin ? (
             <View style={{ gap: 4 }}>
               <TextInput
                 value={name}
-                onChangeText={setName}
+                onChangeText={(t) => {
+                  setName(t);
+                  setNamed(true);
+                }}
                 placeholder="Name this spot"
                 placeholderTextColor={color.stone}
-                style={{ fontFamily: font.display, fontSize: 28, color: color.inkBlack, paddingVertical: 2 }}
+                accessibilityLabel="Name this spot"
+                style={{ fontFamily: font.bodyMedium, fontSize: 17, color: color.inkBlack, backgroundColor: color.paperBright, borderRadius: radius.field, paddingHorizontal: space.m, paddingVertical: 12 }}
               />
-              <Hairline emphasized />
               {location && <Label size={10}>{formatDistance(distance(location, pin))} from you</Label>}
             </View>
+          ) : (
+            <Button title="Use my spot" kind="outline" icon="crosshair" size="md" disabled={!location} onPress={() => location && void drop(location, "Right here")} />
           )}
         </View>
       </Screen>
@@ -347,64 +356,63 @@ export function ReviewScreen() {
 
   return (
     <Screen
-      index="03"
       title="Review deck"
-      trailing={`${included} in play`}
-      accessory={<DevMenu />}
-      footer={
-        isHost ? (
-          <HostAdvance title={`Deal · ${state.settings.durationMinutes}:00`} disabled={!included} />
-        ) : (
-          <HostWaitingBar text="Get ready" />
-        )
-      }
+      right={<DevMenu />}
+      footer={isHost ? <HostAdvance title={`Deal · ${state.settings.durationMinutes}:00`} icon="play" disabled={!included} /> : <HostWaitingBar text="{host} is reviewing the deck" />}
     >
       {isHost ? (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: space.l }}>
-          {state.quests.map((q) => (
-            <View key={q.id}>
-              <Pressable onPress={() => send({ type: "toggleQuest", questId: q.id })} style={{ flexDirection: "row", gap: space.m, paddingVertical: 12 }}>
-                <View style={{ width: 22, height: 22, marginTop: 2, backgroundColor: q.included ? color.signalRed : "transparent", borderWidth: 2, borderColor: q.included ? color.signalRed : color.stone, alignItems: "center", justifyContent: "center" }}>
-                  {q.included && <Label size={12} color={color.paperBright} style={{ fontFamily: font.monoBold, letterSpacing: 0 }}>✓</Label>}
-                </View>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Body color={q.included ? color.inkBlack : color.stone} style={{ textDecorationLine: q.included ? "none" : "line-through" }}>
-                    {q.text}
-                  </Body>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.s }}>
-                    {q.source === "ai" ? <Tag text="AI" filled /> : <Tag text={state.players.find((p) => p.id === q.authorId)?.name ?? "—"} />}
-                    {q.place && <PlaceChip place={q.place} />}
+        <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: space.l, gap: space.s }}>
+          <SectionLabel right={<Label size={11}>{included} in play</Label>}>Deck ({state.quests.length})</SectionLabel>
+          {state.quests.map((q) => {
+            const author = state.players.find((p) => p.id === q.authorId);
+            return (
+              <Pressable key={q.id} onPress={() => send({ type: "toggleQuest", questId: q.id })} accessibilityRole="checkbox" accessibilityState={{ checked: q.included }}>
+                <Card style={{ flexDirection: "row", gap: space.m, alignItems: "center", opacity: q.included ? 1 : 0.55, paddingVertical: 12 }}>
+                  <View style={{ width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: q.included ? color.signalRed : "transparent", borderWidth: 2, borderColor: q.included ? color.signalRed : color.stone }}>
+                    {q.included && <Feather name="check" size={16} color={color.paperBright} />}
                   </View>
-                </View>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Body size={14} style={{ textDecorationLine: q.included ? "none" : "line-through" }}>
+                      {q.text}
+                    </Body>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.s, alignItems: "center" }}>
+                      {q.source === "ai" ? <Tag text="AI" tone="ink" /> : <Label size={10}>{author?.name ?? "—"}</Label>}
+                      {q.place && <PlaceChip place={q.place} />}
+                    </View>
+                  </View>
+                </Card>
               </Pressable>
-              <Hairline style={{ marginLeft: 38 }} />
-            </View>
-          ))}
+            );
+          })}
           {state.aiWriting && (
-            <Label size={11} style={{ paddingVertical: space.m }}>
-              {state.aiMode === "ai" ? "AI is writing in your vibe…" : "Dealing from the offline deck…"}
-            </Label>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, paddingVertical: space.m }}>
+              <ActivityIndicator color={color.signalRed} />
+              <Label size={11}>{state.aiMode === "ai" ? "AI is writing in your vibe…" : "Dealing from the offline deck…"}</Label>
+            </View>
           )}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingVertical: space.m }}>
+          <Card style={{ flexDirection: "row", alignItems: "center", gap: space.s, paddingVertical: 6 }}>
             <TextInput
               value={adding}
               onChangeText={setAdding}
-              placeholder="+ Add another"
+              placeholder="Add another quest…"
               placeholderTextColor={color.stone}
+              accessibilityLabel="Add another quest"
               onSubmitEditing={() => {
-                if (adding.trim()) send({ type: "addQuest", quest: { id: newId(), text: adding, authorId: me.id, source: "human", included: true } });
+                if (adding.trim()) send({ type: "addQuest", quest: { id: newId(), text: adding.trim(), authorId: me.id, source: "human", included: true } });
                 setAdding("");
               }}
-              style={{ flex: 1, fontSize: 17, fontWeight: "500", color: color.inkBlack }}
+              style={{ flex: 1, fontFamily: font.body, fontSize: 16, color: color.inkBlack, paddingVertical: 10 }}
             />
-          </View>
+            <Feather name="corner-down-left" size={18} color={color.stone} />
+          </Card>
         </ScrollView>
       ) : (
-        <View style={{ paddingHorizontal: space.gutter, gap: space.m }}>
+        <View style={{ paddingHorizontal: space.gutter, gap: space.m, marginTop: space.l }}>
           <Display size={160} color={color.signalRed}>
             {String(state.quests.length)}
           </Display>
-          <Display size={34}>quests in the deck. The host is giving it a once-over.</Display>
+          <Display size={40}>quests in the deck.</Display>
+          <Body color={color.stone}>The host is giving it a once-over. Get your shoes on.</Body>
         </View>
       )}
     </Screen>

@@ -9,7 +9,7 @@ export function newGame(code: string, host: Player, opts: { aiMode: GameState["a
     code,
     hostId: host.id,
     phase: "lobby",
-    players: [host],
+    players: [{ ...host, name: host.name.trim() || "Host" }],
     quests: [],
     settings: { ...DEFAULT_SETTINGS },
     assignments: {},
@@ -65,15 +65,29 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
 
   switch (action.type) {
     case "join": {
-      if (s.players.some((p) => p.id === action.player.id)) return prev;
-      s.players.push(action.player);
+      const known = s.players.find((p) => p.id === action.player.id);
+      // Rejoining keeps your seat; a name typed since then wins over a blank one.
+      if (known) {
+        const name = action.player.name.trim();
+        if (!name || name === known.name) return prev;
+        known.name = name;
+        return s;
+      }
+      s.players.push({ ...action.player, name: action.player.name.trim() || nextPlayerName(s) });
       if (s.phase === "playing") assignNext(s, action.player.id, rand);
       return s;
     }
-    case "leave":
-      s.players = s.players.filter((p) => p.id !== action.playerId);
+    case "leave": {
+      // Before the game, leaving takes you off the list. Once quests are being
+      // written, you stay — your quests, proofs and score still count — just away.
+      if (s.phase === "lobby") {
+        s.players = s.players.filter((p) => p.id !== action.playerId);
+      } else if (!(s.away ?? []).includes(action.playerId)) {
+        s.away = [...(s.away ?? []), action.playerId];
+      }
       delete s.assignments[action.playerId];
       return s;
+    }
 
     case "setPhase":
       if (s.phase === action.phase) return prev;
@@ -220,6 +234,12 @@ export function readiness(s: GameState): { ready: Player[]; waiting: Player[]; a
     waiting: here.filter((p) => !s.ready[p.id]),
     away: s.players.filter((p) => gone.has(p.id)),
   };
+}
+
+/** A name for someone who joined without one: "Player 3". */
+export function nextPlayerName(s: GameState): string {
+  const taken = new Set(s.players.map((p) => p.name));
+  for (let n = s.players.length + 1; ; n++) if (!taken.has(`Player ${n}`)) return `Player ${n}`;
 }
 
 /** Who should take over hosting: the first human player who's still here. */

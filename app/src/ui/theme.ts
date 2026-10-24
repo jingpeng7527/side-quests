@@ -1,12 +1,14 @@
-// Concept: "start flag". A race-day poster printed in two inks — signal red
-// and paper white — with near-black for reading text.
+// Concept: "race-day zine". The same two inks — signal red and paper — with
+// near-black for reading, set with sticker-and-marker energy.
 // Rules:
-//  • Two tones only. Calm screens are paper; the high-energy moments (home,
-//    the live quest, game over, the winner) flip to a full red field.
-//  • Condensed black display type, set big. Mono for labels and numbers.
-//  • Sharp corners, hairline rules, no shadows, no gradients.
-//  • The only ornament is the halftone burst (Halftone.tsx), always printed
-//    tonally — one step off the ground — so it never fights the type.
+//  • Two tones. Calm screens are paper; the live moments (home, the quest,
+//    game over) flip to a full red field.
+//  • Hero type is condensed black, slanted (SKEW) and allowed to tilt and
+//    bleed. Everything you read is mono.
+//  • Soft geometry: pill buttons and tags, rounded cards, circle avatars.
+//    No shadows, no gradients — hairlines and fills only.
+//  • The ornament is the racing stripe (Stripes.tsx): a few diagonal bands
+//    at a corner. Hand-set asides (Annotation) add the human touch.
 
 export const color = {
   signalRed: "#D9241C", // oklch(0.57 0.215 29) — 4.8:1 with paperBright
@@ -61,8 +63,17 @@ export const palettes: Record<Tone, Palette> = {
 
 export const font = {
   display: "BigShouldersDisplay_900Black",
+  body: "JetBrainsMono_400Regular",
+  bodyMedium: "JetBrainsMono_500Medium",
   mono: "JetBrainsMono_600SemiBold",
   monoBold: "JetBrainsMono_700Bold",
 } as const;
+
+export const radius = { pill: 999, card: 18, field: 14, chip: 8 } as const;
+
+/** The slant on hero type. */
+export const SKEW = "-9deg";
+/** How much wider slanted type gets at its top edge, per unit of font size (tan 9°). */
+export const SKEW_SPREAD = 0.16;
 
 export const space = { xs: 4, s: 8, m: 16, l: 24, xl: 40, gutter: 20 } as const;

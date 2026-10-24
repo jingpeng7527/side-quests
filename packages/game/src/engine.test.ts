@@ -204,3 +204,25 @@ describe("host handoff", () => {
     expect(authorize(s, { type: "setHost", playerId: "ana" }, "ana")).toBe(false);
   });
 });
+
+describe("leaving and names", () => {
+  it("leaving the lobby takes you off the list; leaving later keeps your score", () => {
+    let s = lobby([quest("a1", "ana"), quest("b1", "bo")]);
+    expect(apply(s, { type: "leave", playerId: "bo" }).players.map((p) => p.id)).toEqual(["host", "ana"]);
+    s = apply(s, { type: "startGame" });
+    s = apply(s, { type: "submit", submission: proof(s.assignments.bo, "bo", "p1") });
+    s = apply(s, { type: "setPhase", phase: "scoreboard" });
+    s = apply(s, { type: "leave", playerId: "bo" });
+    expect(s.players.some((p) => p.id === "bo")).toBe(true);
+    expect(s.away).toContain("bo");
+    expect(ranking(s).find((r) => r.player.id === "bo")?.score).toBe(1);
+  });
+
+  it("gives a blank name a placeholder, and lets a rejoin fix it", () => {
+    let s = newGame("ABCD", { id: "host", name: "" }, { aiMode: "offline", devTools: false });
+    s = apply(s, { type: "join", player: { id: "x", name: "  " } });
+    expect(s.players.find((p) => p.id === "x")?.name).toBe("Player 2");
+    s = apply(s, { type: "join", player: { id: "x", name: "Ana" } });
+    expect(s.players.find((p) => p.id === "x")?.name).toBe("Ana");
+  });
+});

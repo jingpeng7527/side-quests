@@ -1,24 +1,28 @@
+import Feather from "@expo/vector-icons/Feather";
 import { distance, formatDistance, newSeed, type Coordinate, type QuestPlace, type WalkingRoute } from "@side-quests/game";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, View } from "react-native";
+import { Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { serverUrl } from "../lib/config";
 import { useGame } from "../lib/session";
 import { DevMenu } from "../ui/DevMenu";
+import { fitBlock, fitLine } from "../ui/fit";
 import { easeIn, useToast } from "../ui/flow";
-import { halftones } from "../ui/Halftone";
-import { Body, Display, Label, PaletteProvider, Screen, SlabButton, Tag, color, space } from "../ui/kit";
+import { Avatar, Body, Button, Card, Display, Label, PaletteProvider, Screen, SectionLabel, Tag, color, radius, space } from "../ui/kit";
 import { QuestMap } from "../ui/maps";
 import { ProofImage } from "../ui/Proof";
 
 export function InGameScreen() {
   const { state, me, myQuest, mySkipsLeft, send, location } = useGame();
+  const { width } = useWindowDimensions();
   const [capturing, setCapturing] = useState(false);
   const [stamp] = useState(() => new Animated.Value(0));
-  const toast = useToast();
+  // Above the standings, clear of the quest card and the Prove it button.
+  const toast = useToast({ bottom: 150 });
   const done = state.submissions.filter((s) => s.playerId === me.id).length;
   const place = myQuest?.place;
+  const w = Math.min(width, 560) - space.gutter * 2;
 
   // A friend finishing a quest is news: a toast and a light tap.
   const seen = useRef(state.submissions.length);
@@ -28,7 +32,7 @@ export function InGameScreen() {
     const last = fresh[fresh.length - 1];
     if (!last) return;
     const name = state.players.find((p) => p.id === last.playerId)?.name ?? "Someone";
-    toast.show(fresh.length > 1 ? `${fresh.length} quests just got done` : `${name} completed a quest`);
+    toast.show(fresh.length > 1 ? `${fresh.length} quests just got done!` : `${name} completed a quest!`, fresh.length > 1 ? undefined : name);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [state.submissions.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -42,93 +46,148 @@ export function InGameScreen() {
     ]).start();
   };
 
+  const cardWidth = w - space.m * 2 - 8;
+  const questSize = myQuest ? fitBlock(myQuest.text, cardWidth, place ? 120 : 190, 58, 22) : 40;
+
   return (
     <Screen
-      index="04"
-      title="In game"
-      trailing={`${done} done`}
       tone="signal"
-      art={halftones.inGame}
-      accessory={<DevMenu />}
+      stripes={{ corner: "tr", color: color.paperBright, bands: [[0.04, 0.05], [0.13, 0.025]] }}
+      title={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <LiveDot />
+          <Label size={14} bold color={color.paperBright}>
+            Live
+          </Label>
+        </View>
+      }
+      right={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
+          <Label size={11} bold color={color.paperBright}>
+            {done} done
+          </Label>
+          <DevMenu />
+        </View>
+      }
       footer={
-        <View style={{ gap: space.s }}>
-          <Standings />
-          <View style={{ flexDirection: "row", gap: space.s }}>
-            <SlabButton
-              title={`Skip · ${mySkipsLeft}`}
-              kind="outline"
-              style={{ width: 128 }}
-              disabled={!mySkipsLeft || !myQuest}
-              onPress={() => send({ type: "skip", playerId: me.id })}
-            />
-            <SlabButton title="◉ Snap proof" style={{ flex: 1 }} disabled={!myQuest} onPress={() => setCapturing(true)} />
-          </View>
+        <View style={{ gap: space.s, alignItems: "center" }}>
+          <Button title="Prove it" icon="camera" tilt={-2} disabled={!myQuest} onPress={() => setCapturing(true)} style={{ alignSelf: "stretch" }} />
+          {state.settings.allowSkips && (
+            <Pressable onPress={() => send({ type: "skip", playerId: me.id })} disabled={!mySkipsLeft || !myQuest} hitSlop={10} accessibilityRole="button" style={{ opacity: !mySkipsLeft || !myQuest ? 0.4 : 1 }}>
+              <Label size={11} bold color={color.paperBright} style={{ textDecorationLine: "underline" }}>
+                Skip this one · {mySkipsLeft} left
+              </Label>
+            </Pressable>
+          )}
         </View>
       }
     >
-      <View style={{ flex: 1, paddingHorizontal: space.gutter, gap: space.m }}>
-        <Countdown compact={!!place} />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, gap: space.m, paddingBottom: space.l }}>
+        <Countdown width={w} compact={!!place} />
         {myQuest ? (
-          <View style={{ flex: 1, gap: space.m }}>
-            <View style={{ flexDirection: "row", gap: space.s }}>
-              <Tag text="Your quest" filled />
-              {myQuest.source === "ai" && <Tag text="AI-written" />}
-            </View>
-            <Display size={place ? 52 : 74} adjustsFontSizeToFit minimumFontScale={0.4} style={{ flexShrink: 1 }}>
-              {myQuest.text}
-            </Display>
-            {place && <QuestMapCard place={place} me={location} />}
-          </View>
+          <PaletteProvider tone="paper">
+            <Card tilt={-2.5} style={{ gap: space.s, borderColor: "transparent", marginHorizontal: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Label size={12} bold color={color.signalRed} style={{ textDecorationLine: "underline" }}>
+                  Current quest
+                </Label>
+                {myQuest.source === "ai" && <Tag text="AI-written" tone="ink" />}
+              </View>
+              <Display size={questSize} color={color.signalRed} style={{ marginVertical: 2 }}>
+                {myQuest.text}
+              </Display>
+              <Label size={12} bold color={color.signalRed}>
+                #{done + 1}
+              </Label>
+            </Card>
+          </PaletteProvider>
         ) : (
-          <View style={{ gap: space.m, marginTop: space.l }}>
-            <Display size={74}>{"Deck's dry."}</Display>
-            <Body>{state.aiWriting ? "Writing fresh quests in your group's vibe…" : "Waiting on new quests…"}</Body>
-          </View>
-        )}
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            alignSelf: "center",
-            top: "40%",
-            opacity: stamp,
-            transform: [{ rotate: "-7deg" }, { scale: stamp.interpolate({ inputRange: [0, 1], outputRange: [1.6, 1] }) }],
-          }}
-        >
-          <View style={{ backgroundColor: color.inkBlack, paddingHorizontal: space.l, paddingVertical: space.m }}>
-            <Display size={76} style={{ textAlign: "center" }}>
-              {"Quest\ncomplete"}
+          <Card tilt={-2} style={{ gap: space.s, borderColor: "transparent" }}>
+            <Display size={52} color={color.signalRed}>
+              {"Deck's dry."}
             </Display>
-          </View>
-        </Animated.View>
-      </View>
+            <Body size={14} color={color.inkBlack}>
+              {state.aiWriting ? "Writing fresh quests in your group's vibe…" : "Waiting on new quests…"}
+            </Body>
+          </Card>
+        )}
+        {place && <QuestMapCard place={place} me={location} />}
+        <Standings />
+      </ScrollView>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          alignSelf: "center",
+          top: "35%",
+          opacity: stamp,
+          transform: [{ rotate: "-8deg" }, { scale: stamp.interpolate({ inputRange: [0, 1], outputRange: [1.6, 1] }) }],
+        }}
+      >
+        <View style={{ backgroundColor: color.inkBlack, paddingHorizontal: space.l, paddingVertical: space.m, borderRadius: radius.card }}>
+          <Display size={64} fit={w * 0.8} style={{ textAlign: "center" }}>
+            Quest complete!
+          </Display>
+        </View>
+      </Animated.View>
       {toast.node}
       <CaptureSheet visible={capturing} onClose={() => setCapturing(false)} onSubmitted={celebrate} />
     </Screen>
   );
 }
 
-/** Everyone's tally, live — so the race feels like a race. You first, then by score. */
+function LiveDot() {
+  const [pulse] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color.paperBright, opacity: pulse }} />;
+}
+
+/** Everyone's tally, live — avatars with scores, host marked. You first. */
 function Standings() {
   const { state, me } = useGame();
-  const counts = state.players
+  const rows = state.players
     .map((p) => ({ p, n: state.submissions.filter((s) => s.playerId === p.id).length }))
     .sort((a, b) => Number(b.p.id === me.id) - Number(a.p.id === me.id) || b.n - a.n);
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.m }} accessibilityLabel="Standings">
-      {counts.map(({ p, n }) => (
-        <View key={p.id} style={{ flexDirection: "row", alignItems: "baseline", gap: 6, opacity: state.away?.includes(p.id) ? 0.5 : 1 }}>
-          <Label size={11} color={color.paperBright} style={{ opacity: p.id === me.id ? 1 : 0.85 }}>
-            {p.id === me.id ? "You" : p.name}
-          </Label>
-          <Display size={22}>{String(n)}</Display>
-        </View>
-      ))}
-    </ScrollView>
+    <View style={{ gap: space.s }}>
+      <SectionLabel>
+        <Label size={13} bold color={color.paperBright}>
+          Live standings
+        </Label>
+      </SectionLabel>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.m, paddingVertical: 4 }} accessibilityLabel="Standings">
+        {rows.map(({ p, n }) => {
+          const away = state.away?.includes(p.id);
+          return (
+            <View key={p.id} style={{ alignItems: "center", gap: 4, minWidth: 56, opacity: away ? 0.5 : 1 }}>
+              <View style={{ padding: 2, borderRadius: 26, backgroundColor: color.paperBright }}>
+                <Avatar name={p.name} size={44} bot={p.isBot} ring={p.id === me.id} />
+              </View>
+              <Label size={11} bold color={color.paperBright} numberOfLines={1} style={{ maxWidth: 72, textTransform: "none" }}>
+                {p.id === me.id ? "You" : p.name}
+              </Label>
+              {p.id === state.hostId && <Tag text="Host" tone="paper" />}
+              <Display size={26} skew={false}>
+                {String(n)}
+              </Display>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
-function Countdown({ compact }: { compact: boolean }) {
+function Countdown({ width, compact }: { width: number; compact: boolean }) {
   const { state, clockOffset } = useGame();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -138,7 +197,7 @@ function Countdown({ compact }: { compact: boolean }) {
   const total = state.settings.durationMinutes * 60;
   const remaining = Math.max(0, Math.floor(((state.endsAt ?? 0) - (now + clockOffset)) / 1000));
   const urgent = remaining < 60;
-  const text = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
+  const text = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
 
   // A nudge you can feel at one minute and at ten seconds.
   const warned = useRef(new Set<number>());
@@ -151,13 +210,15 @@ function Countdown({ compact }: { compact: boolean }) {
     }
   }, [remaining]);
 
+  // Sized for the widest digits, so the clock doesn't jump as it counts.
+  const size = fitLine("00:00", width, compact ? 120 : 170);
   return (
     <View accessible accessibilityLabel={`${Math.floor(remaining / 60)} minutes ${remaining % 60} seconds left`} style={{ gap: space.s }}>
-      <Display size={compact ? 92 : 136} color={urgent ? color.inkBlack : color.paperBright} style={{ fontVariant: ["tabular-nums"] }}>
+      <Display size={size} color={urgent ? color.inkBlack : color.paperBright} style={{ fontVariant: ["tabular-nums"] }}>
         {text}
       </Display>
-      <View style={{ height: 4, backgroundColor: color.deepRed }}>
-        <View style={{ height: 4, width: `${(remaining / total) * 100}%`, backgroundColor: urgent ? color.inkBlack : color.paperBright }} />
+      <View style={{ height: 6, borderRadius: 3, backgroundColor: color.deepRed, overflow: "hidden" }}>
+        <View style={{ height: 6, width: `${(remaining / total) * 100}%`, backgroundColor: urgent ? color.inkBlack : color.paperBright }} />
       </View>
     </View>
   );
@@ -189,33 +250,33 @@ function QuestMapCard({ place, me }: { place: QuestPlace; me: Coordinate | null 
   const openDirections = () => {
     const { latitude: lat, longitude: lng } = place.coordinate;
     const url =
-      Platform.OS === "ios"
-        ? `http://maps.apple.com/?daddr=${lat},${lng}&dirflg=w`
-        : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`;
+      Platform.OS === "ios" ? `http://maps.apple.com/?daddr=${lat},${lng}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`;
     void Linking.openURL(url);
   };
 
-  const status = arrived
-    ? "You're here"
-    : away != null
-      ? `${formatDistance(route?.distance ?? away)}${route ? ` · ${Math.ceil(route.duration / 60)} min` : ""}`
-      : "";
+  const status = arrived ? "You're here!" : away != null ? `${formatDistance(route?.distance ?? away)}${route ? ` · ${Math.ceil(route.duration / 60)} min` : ""}` : "Finding you…";
 
   return (
     <PaletteProvider tone="paper">
-      <View style={{ flex: 1, minHeight: 180, maxHeight: 300, borderWidth: 3, borderColor: color.paperBright }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: arrived ? color.inkBlack : color.paperBright }}>
-          <Label size={12} color={arrived ? color.paperBright : color.inkBlack} numberOfLines={1} style={{ flex: 1 }}>
-            ⌖ {place.name}
+      <View style={{ borderRadius: radius.card, overflow: "hidden", backgroundColor: color.paperBright }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, paddingHorizontal: space.m, paddingVertical: 10, backgroundColor: arrived ? color.inkBlack : color.paperBright }}>
+          <Feather name="map-pin" size={14} color={arrived ? color.paperBright : color.signalRed} />
+          <Label size={12} bold color={arrived ? color.paperBright : color.inkBlack} numberOfLines={1} style={{ flex: 1 }}>
+            {place.name}
           </Label>
-          <Label size={12} color={arrived ? color.paperBright : color.inkBlack}>
+          <Label size={12} bold color={arrived ? color.paperBright : color.signalRed}>
             {status}
           </Label>
         </View>
-        <QuestMap style={{ flex: 1 }} place={place} me={me} route={route?.coordinates ?? null} arrived={arrived} />
-        <Pressable onPress={openDirections} style={{ position: "absolute", right: 8, bottom: 8, backgroundColor: color.signalRed, paddingHorizontal: 10, paddingVertical: 8 }}>
-          <Label size={11} color={color.paperBright}>
-            Directions ↗
+        <QuestMap style={{ height: 200 }} place={place} me={me} route={route?.coordinates ?? null} arrived={arrived} />
+        <Pressable
+          onPress={openDirections}
+          accessibilityRole="link"
+          style={{ position: "absolute", right: 10, bottom: 10, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: color.signalRed, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 8 }}
+        >
+          <Feather name="navigation" size={13} color={color.paperBright} />
+          <Label size={11} bold color={color.paperBright}>
+            Directions
           </Label>
         </Pressable>
       </View>
@@ -247,9 +308,7 @@ function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onC
     setError(null);
     try {
       const result =
-        from === "camera"
-          ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
-          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+        from === "camera" ? await ImagePicker.launchCameraAsync({ quality: 0.8 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
       if (!result.canceled && result.assets?.[0]) setPicked({ uri: result.assets[0].uri, takenAt: Date.now() });
     } catch {
       setError(from === "camera" ? "No camera here — choose from your library instead." : "Couldn't open your photos.");
@@ -273,22 +332,23 @@ function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onC
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <Screen
-        index="◉"
-        title={picked ? "Check your proof" : "Proof"}
+        title={picked ? "Check your proof" : "Prove it"}
+        left={{ icon: "x", onPress: close, label: "Close" }}
         footer={
           picked ? (
             <>
-              <SlabButton title={uploading ? "Sending…" : "Submit proof"} disabled={uploading} onPress={submit} />
-              <SlabButton title="Retake" kind="outline" disabled={uploading} onPress={() => setPicked(null)} />
+              <Button title={uploading ? "Sending…" : "Submit proof"} icon="check" disabled={uploading} onPress={submit} />
+              <Button title="Retake" kind="outline" icon="rotate-ccw" size="md" disabled={uploading} onPress={() => setPicked(null)} />
             </>
           ) : (
             <>
-              <SlabButton title="Take photo" onPress={() => pick("camera")} />
-              <SlabButton title="Choose from library" kind="outline" onPress={() => pick("library")} />
+              <Button title="Take photo" icon="camera" onPress={() => pick("camera")} />
+              <Button title="Choose from library" kind="outline" icon="image" size="md" onPress={() => pick("library")} />
               {state.devTools && (
-                <SlabButton
+                <Button
                   title="Use stand-in shot (dev)"
-                  kind="outline"
+                  kind="quiet"
+                  size="md"
                   onPress={() => {
                     submitProof({ kind: "standin", seed: standinSeed });
                     setStandinSeed(newSeed());
@@ -297,25 +357,28 @@ function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onC
                   }}
                 />
               )}
-              <SlabButton title="Cancel" kind="quiet" onPress={close} />
             </>
           )
         }
       >
-        <View style={{ flex: 1, paddingHorizontal: space.gutter, gap: space.m }}>
-          <Display size={34}>{myQuest?.text ?? ""}</Display>
-          {error && <Body size={15} color={color.signalRed}>{error}</Body>}
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ flex: 1, paddingHorizontal: space.gutter, gap: space.m, paddingBottom: space.s }}>
+          <Body size={16} medium>
+            {myQuest?.text ?? ""}
+          </Body>
+          {error && <Body size={13} color={color.signalRed}>{error}</Body>}
+          {/* The preview fills what's left of the screen and never more — no sideways overflow. */}
+          <View style={{ flex: 1, minHeight: 160, borderRadius: radius.card, overflow: "hidden", borderWidth: 3, borderColor: picked ? color.signalRed : color.paperLine, backgroundColor: color.paperRaised }}>
             {picked ? (
-              <View style={{ height: "100%", maxWidth: "100%", aspectRatio: 3 / 4, overflow: "hidden", opacity: uploading ? 0.5 : 1 }}>
-                <Image source={{ uri: picked.uri }} style={{ flex: 1 }} resizeMode="cover" />
-              </View>
+              <Image source={{ uri: picked.uri }} style={{ flex: 1, opacity: uploading ? 0.5 : 1 }} resizeMode="contain" />
             ) : state.devTools ? (
-              <ProofImage proof={{ kind: "standin", seed: standinSeed }} quest={myQuest?.text ?? ""} by={me.name} large style={{ height: "100%", aspectRatio: 3 / 4 }} />
+              <ProofImage proof={{ kind: "standin", seed: standinSeed }} quest={myQuest?.text ?? ""} by={me.name} large style={{ flex: 1 }} />
             ) : (
-              <Body color={color.stone} style={{ textAlign: "center" }}>
-                Snap the moment — your friends vote on whether it counts.
-              </Body>
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: space.l, gap: space.s }}>
+                <Feather name="camera" size={36} color={color.stone} />
+                <Body color={color.stone} style={{ textAlign: "center" }}>
+                  Snap the moment — your friends vote on whether it counts.
+                </Body>
+              </View>
             )}
           </View>
         </View>

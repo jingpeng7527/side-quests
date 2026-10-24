@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, Modal, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGame, useSession } from "../lib/session";
-import { Body, Display, Label, PaletteProvider, SlabButton, WaitingBar, color, space } from "./kit";
+import { Avatar, Body, Button, type IconName, Display, Label, PaletteProvider, SwitchRow, WaitingBar, color, radius, space } from "./kit";
 
 // Motion: one family — expo-out for entrances, quicker ease-in for exits.
 export const easeOut = Easing.bezier(0.22, 1, 0.36, 1);
@@ -89,6 +89,8 @@ export function TransitionBanner() {
         paddingBottom: space.m,
         paddingHorizontal: space.gutter,
         backgroundColor: color.inkBlack,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
         flexDirection: "row",
         alignItems: "center",
         gap: space.m,
@@ -108,7 +110,7 @@ export function TransitionBanner() {
         </Body>
       </View>
       {isHost && (
-        <Pressable onPress={() => send({ type: "cancelTransition" })} hitSlop={8} style={{ borderWidth: 2, borderColor: color.paperBright, paddingHorizontal: 12, paddingVertical: 8 }}>
+        <Pressable onPress={() => send({ type: "cancelTransition" })} hitSlop={8} style={{ borderWidth: 2, borderColor: color.paperBright, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 }}>
           <Label size={12} color={color.paperBright}>
             Wait
           </Label>
@@ -124,7 +126,7 @@ export function ConnectionBanner() {
   const insets = useSafeAreaInsets();
   if (!state || connected) return null;
   return (
-    <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom + space.s, paddingTop: space.s, backgroundColor: color.inkBlack, alignItems: "center" }} accessibilityLiveRegion="polite">
+    <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom + space.s, paddingTop: space.s, backgroundColor: color.inkBlack, alignItems: "center", borderTopLeftRadius: 20, borderTopRightRadius: 20 }} accessibilityLiveRegion="polite">
       <Label size={11} color={color.paperBright}>
         Reconnecting…
       </Label>
@@ -153,12 +155,12 @@ export function ConfirmSheet({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <PaletteProvider tone="paper">
         <Pressable style={{ flex: 1, backgroundColor: "rgba(23,17,15,0.55)", justifyContent: "flex-end" }} onPress={onCancel}>
-          <Pressable style={{ backgroundColor: color.paper, padding: space.gutter, paddingBottom: insets.bottom + space.m, gap: space.m }}>
+          <Pressable style={{ backgroundColor: color.paper, padding: space.gutter, paddingBottom: insets.bottom + space.m, gap: space.m, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
             <Display size={40}>{title}</Display>
             <Body color={color.stone}>{body}</Body>
             <View style={{ gap: space.s, marginTop: space.s }}>
-              <SlabButton title={confirm} onPress={onConfirm} />
-              <SlabButton title="Not yet" kind="quiet" onPress={onCancel} />
+              <Button title={confirm} onPress={onConfirm} arrow />
+              <Button title="Not yet" kind="quiet" onPress={onCancel} />
             </View>
           </Pressable>
         </Pressable>
@@ -171,7 +173,7 @@ export function ConfirmSheet({
  * The host's "move on" button. Shows who's done; if anyone isn't, asks first.
  * While a move is pending it says so instead of double-firing.
  */
-export function HostAdvance({ title, disabled, waitingVerb }: { title: string; disabled?: boolean; waitingVerb?: string }) {
+export function HostAdvance({ title, disabled, waitingVerb, icon }: { title: string; disabled?: boolean; waitingVerb?: string; icon?: IconName }) {
   const { state, send, me } = useGame();
   const [confirming, setConfirming] = useState(false);
   const to = NEXT_PHASE[state.phase];
@@ -186,10 +188,10 @@ export function HostAdvance({ title, disabled, waitingVerb }: { title: string; d
     if (to) send({ type: "requestPhase", phase: to });
   };
 
-  if (state.transition) return <SlabButton title="Moving on…" disabled onPress={() => {}} />;
+  if (state.transition) return <Button title="Moving on…" disabled onPress={() => {}} />;
   return (
     <>
-      <SlabButton title={title} disabled={disabled || !to} onPress={() => (tracksReady && others.length ? setConfirming(true) : go())} />
+      <Button title={title} icon={icon} arrow={!icon} disabled={disabled || !to} onPress={() => (tracksReady && others.length ? setConfirming(true) : go())} />
       {tracksReady && (
         <Label size={10} style={{ textAlign: "center" }}>
           {total - others.length} of {total} {total === 1 ? "player" : "players"} done {waitingVerb}
@@ -207,25 +209,21 @@ export function HostAdvance({ title, disabled, waitingVerb }: { title: string; d
   );
 }
 
-/** A player's "I'm done" toggle for phases the host waits on. */
-export function ReadyToggle({ doneLabel, notDoneLabel }: { doneLabel: string; notDoneLabel: string }) {
+/** A player's "I'm done" switch for phases the host waits on. */
+export function ReadyToggle({ label, detail }: { label: string; detail?: string }) {
   const { state, me, send } = useGame();
   const ready = !!state.ready[me.id];
   const { ready: done, waiting } = readiness(state);
   return (
-    <View style={{ gap: space.xs }}>
-      <SlabButton
-        title={ready ? notDoneLabel : doneLabel}
-        kind={ready ? "outline" : "primary"}
-        onPress={() => {
-          void Haptics.selectionAsync().catch(() => {});
-          send({ type: "setReady", playerId: me.id, ready: !ready });
-        }}
-      />
-      <Label size={10} style={{ textAlign: "center" }}>
-        {done.length} of {done.length + waiting.length} done · the host moves everyone on
-      </Label>
-    </View>
+    <SwitchRow
+      label={label}
+      value={ready}
+      detail={detail ?? `${done.length} of ${done.length + waiting.length} done · the host moves everyone on`}
+      onChange={(v) => {
+        void Haptics.selectionAsync().catch(() => {});
+        send({ type: "setReady", playerId: me.id, ready: v });
+      }}
+    />
   );
 }
 
@@ -234,16 +232,16 @@ export function listNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** A transient one-line toast that rises from the bottom. */
-export function useToast() {
-  const [message, setMessage] = useState<string | null>(null);
+/** A transient toast — a cream pill rising from the bottom, with the player's avatar when it's about someone. */
+export function useToast({ bottom = 104 }: { bottom?: number } = {}) {
+  const [message, setMessage] = useState<{ text: string; who?: string } | null>(null);
   const [t] = useState(() => new Animated.Value(0));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const show = (m: string) => {
-    setMessage(m);
+  const show = (text: string, who?: string) => {
+    setMessage({ text, who });
     if (timer.current) clearTimeout(timer.current);
     Animated.timing(t, { toValue: 1, duration: 260, easing: easeOut, useNativeDriver: true }).start();
-    timer.current = setTimeout(() => Animated.timing(t, { toValue: 0, duration: 200, easing: easeIn, useNativeDriver: true }).start(), 2600);
+    timer.current = setTimeout(() => Animated.timing(t, { toValue: 0, duration: 200, easing: easeIn, useNativeDriver: true }).start(), 2800);
   };
   const node = (
     <Animated.View
@@ -253,15 +251,17 @@ export function useToast() {
         position: "absolute",
         left: space.gutter,
         right: space.gutter,
-        bottom: 96,
+        bottom,
+        alignItems: "center",
         opacity: t,
-        transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+        transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
       }}
     >
-      <View style={{ alignSelf: "center", backgroundColor: color.inkBlack, paddingHorizontal: space.m, paddingVertical: 10 }}>
-        <Label size={12} color={color.paperBright}>
-          {message ?? ""}
-        </Label>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.s, backgroundColor: color.paperBright, borderRadius: radius.pill, paddingVertical: 6, paddingLeft: message?.who ? 6 : space.m, paddingRight: space.m, borderWidth: 1.5, borderColor: color.paperLine }}>
+        {message?.who ? <Avatar name={message.who} size={30} /> : null}
+        <Body size={13} medium color={color.inkBlack} numberOfLines={2} style={{ flexShrink: 1 }}>
+          {message?.text ?? ""}
+        </Body>
       </View>
     </Animated.View>
   );
@@ -286,7 +286,9 @@ export function Reveal({ index, children }: { index: number; children: ReactNode
 export function TextAction({ title, onPress }: { title: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} hitSlop={12} accessibilityRole="button" style={{ alignSelf: "center", paddingVertical: space.xs }}>
-      <Label size={11}>{title}</Label>
+      <Label size={11} bold style={{ textDecorationLine: "underline" }}>
+        {title}
+      </Label>
     </Pressable>
   );
 }
@@ -296,7 +298,7 @@ export function HostWaitingBar({ text }: { text: string }) {
   const { state } = useGame();
   const hostAway = state.away?.includes(state.hostId);
   const host = state.players.find((p) => p.id === state.hostId)?.name ?? "The host";
-  return <WaitingBar text={hostAway ? `${host}'s phone dropped off — hang tight` : text} />;
+  return <WaitingBar text={hostAway ? `${host}'s phone dropped off — hang tight` : text.replace("{host}", host)} />;
 }
 
 /** When hosting passes to you (the old host's phone dropped off), say so. */
@@ -309,7 +311,7 @@ export function HostChangeNotice() {
     if (previous.current && hostId && previous.current !== hostId) {
       const old = state?.players.find((p) => p.id === previous.current)?.name ?? "The host";
       const next = state?.players.find((p) => p.id === hostId)?.name ?? "Someone";
-      toast.show(hostId === me.id ? `${old} dropped off — you're the host now` : `${next} is the host now`);
+      toast.show(hostId === me.id ? `${old} dropped off — you're the host now` : `${next} is the host now`, next);
       if (hostId === me.id) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
     previous.current = hostId;

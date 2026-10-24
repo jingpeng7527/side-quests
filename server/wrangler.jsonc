@@ -4,6 +4,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Logs (including errors the app reports via /api/log) in the Cloudflare dashboard.
+  "observability": { "enabled": true },
   "durable_objects": {
     "bindings": [{ "name": "LOBBY", "class_name": "Lobby" }]
   },

@@ -1,4 +1,5 @@
 import { walkingRoute } from "./directions";
+import { nameSpot, searchPlaces } from "./geocode";
 import type { Env } from "./lobby";
 
 export { Lobby } from "./lobby";
@@ -53,6 +54,26 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!from || !to || [...from, ...to].some(Number.isNaN)) return new Response("from/to required", { status: 400 });
     const route = await walkingRoute(from, to);
     return route ? Response.json(route) : new Response("no route", { status: 502 });
+  }
+
+  // GET /api/geocode?q=…&near=lat,lng -> PlaceHit[];  GET /api/geocode?at=lat,lng -> { name }
+  if (parts[1] === "geocode") {
+    const pair = (v: string | null) => {
+      const n = v?.split(",").map(Number);
+      return n && n.length === 2 && !n.some(Number.isNaN) ? (n as [number, number]) : undefined;
+    };
+    const at = pair(url.searchParams.get("at"));
+    if (at) return Response.json({ name: await nameSpot(at[0], at[1]) });
+    const q = url.searchParams.get("q")?.trim();
+    if (!q) return new Response("q or at required", { status: 400 });
+    return Response.json(await searchPlaces(q.slice(0, 120), pair(url.searchParams.get("near"))));
+  }
+
+  // POST /api/log — the app reports its own errors here, so they show up in Cloudflare's logs.
+  if (parts[1] === "log" && request.method === "POST") {
+    const entry = (await request.text()).slice(0, 4000);
+    console.warn(`client: ${entry}`);
+    return new Response(null, { status: 204 });
   }
 
   if (parts[1] === "health") return Response.json({ ok: true, ai: env.OPENAI_API_KEY ? "ai" : "offline" });

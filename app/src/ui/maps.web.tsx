@@ -1,48 +1,188 @@
 import type { Coordinate, QuestPlace } from "@side-quests/game";
-import { createElement } from "react";
-import { Text, View, type ViewStyle } from "react-native";
-import { color, font } from "./theme";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { createElement, useEffect, useRef } from "react";
+import { View, type ViewStyle } from "react-native";
+import { color } from "./theme";
 
-// react-native-maps has no web implementation. On web, show an embedded
-// OpenStreetMap view centered on the relevant spot instead — enough to
-// orient a player who joined from a browser.
+// Web maps: Leaflet over OpenStreetMap tiles, rendered quiet — grayscale and
+// warmed toward the app's paper tone — so the red route and pins carry the color,
+// close to the calm native Apple/Google look. (Keyless tiles: CARTO's now need a key.)
 
-function OsmEmbed({ center, spanDeg, marker, style }: { center: Coordinate; spanDeg: number; marker?: Coordinate; style?: ViewStyle }) {
-  const bbox = [center.longitude - spanDeg, center.latitude - spanDeg * 0.7, center.longitude + spanDeg, center.latitude + spanDeg * 0.7].join(",");
-  const m = marker ? `&marker=${marker.latitude},${marker.longitude}` : "";
+let styled = false;
+function injectStyles() {
+  if (styled || typeof document === "undefined") return;
+  styled = true;
+  const css = document.createElement("style");
+  css.textContent = `
+    .sq-map { background: ${color.paper}; font-family: inherit; }
+    .sq-map .sq-tiles { filter: grayscale(1) sepia(0.16) contrast(0.88) brightness(1.08); }
+    .sq-map .leaflet-control-attribution { font-size: 9px; background: rgba(255,250,246,0.8); }
+    .sq-pin { display: flex; align-items: center; justify-content: center; }
+  `;
+  document.head.appendChild(css);
+}
+
+const flagIcon = L.divIcon({
+  className: "sq-pin",
+  iconSize: [32, 42],
+  iconAnchor: [16, 42],
+  html: `<svg width="32" height="42" viewBox="0 0 32 42"><rect x="2" y="2" width="28" height="28" rx="9" fill="${color.signalRed}"/><path d="M11 23V9h11l-2.5 4 2.5 4H13" stroke="${color.paperBright}" stroke-width="2.4" fill="none" stroke-linejoin="round"/><rect x="14.5" y="30" width="3" height="11" rx="1.5" fill="${color.signalRed}"/></svg>`,
+});
+
+const youIcon = L.divIcon({
+  className: "sq-pin",
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+  html: `<div style="width:16px;height:16px;border-radius:8px;background:${color.signalRed};border:3px solid ${color.paperBright};box-shadow:0 0 0 2px ${color.signalRed}"></div>`,
+});
+
+const stepIcon = (n: number, last: boolean) =>
+  L.divIcon({
+    className: "sq-pin",
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    html: `<div style="width:26px;height:26px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:${last ? color.signalRed : color.paperBright};border:2.5px solid ${color.signalRed};color:${last ? color.paperBright : color.signalRed};font:700 12px ui-monospace,monospace">${n}</div>`,
+  });
+
+const ll = (c: Coordinate): L.LatLngTuple => [c.latitude, c.longitude];
+
+/** A Leaflet map in a View. `draw` (re)paints overlays whenever `deps` change. */
+function LeafletMap({
+  style,
+  center,
+  zoom,
+  draw,
+  deps,
+  onTap,
+}: {
+  style?: ViewStyle;
+  center: Coordinate;
+  zoom: number;
+  draw: (map: L.Map, layer: L.LayerGroup) => void;
+  deps: unknown[];
+  onTap?: (c: Coordinate) => void;
+}) {
+  const el = useRef<HTMLDivElement | null>(null);
+  const map = useRef<L.Map | null>(null);
+  const layer = useRef<L.LayerGroup | null>(null);
+  // The click handler is bound once; it reads the latest onTap through this ref.
+  const tap = useRef(onTap);
+  useEffect(() => {
+    tap.current = onTap;
+  }, [onTap]);
+
+  useEffect(() => {
+    injectStyles();
+    if (!el.current || map.current) return;
+    const m = L.map(el.current, { zoomControl: false, attributionControl: true, center: ll(center), zoom });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+      className: "sq-tiles",
+    }).addTo(m);
+    m.on("click", (e: L.LeafletMouseEvent) => tap.current?.({ latitude: e.latlng.lat, longitude: e.latlng.lng }));
+    layer.current = L.layerGroup().addTo(m);
+    map.current = m;
+    // The View may still be sizing itself.
+    const resize = setTimeout(() => m.invalidateSize(), 50);
+    return () => {
+      clearTimeout(resize);
+      // Stop any pan/zoom in flight first: removing a map mid-animation throws.
+      m.stop();
+      m.remove();
+      map.current = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!map.current || !layer.current) return;
+    layer.current.clearLayers();
+    draw(map.current, layer.current);
+  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <View style={[{ overflow: "hidden", backgroundColor: color.paperRaised }, style]}>
-      {createElement("iframe", {
-        src: `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik${m}`,
-        style: { border: 0, width: "100%", height: "100%" },
-        title: "Map",
-      })}
+    <View style={[{ overflow: "hidden" }, style]}>
+      {createElement("div", { ref: el, className: "sq-map", style: { width: "100%", height: "100%" } })}
     </View>
   );
 }
 
 export function PlaceFlag() {
+  return createElement("div", { dangerouslySetInnerHTML: { __html: flagIcon.options.html as string } });
+}
+
+/** In game: the quest's spot, its radius, you, and the walk between. */
+export function QuestMap({ place, me, route, arrived, style }: { place: QuestPlace; me: Coordinate | null; route: Coordinate[] | null; arrived: boolean; style?: ViewStyle }) {
   return (
-    <View style={{ width: 28, height: 28, backgroundColor: color.signalRed, alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ color: color.paperBright, fontFamily: font.monoBold }}>⚑</Text>
-    </View>
+    <LeafletMap
+      style={style}
+      center={place.coordinate}
+      zoom={16}
+      deps={[place.coordinate.latitude, place.coordinate.longitude, place.radius, me?.latitude, me?.longitude, route?.length, arrived]}
+      draw={(map, layer) => {
+        L.circle(ll(place.coordinate), { radius: place.radius, color: color.signalRed, weight: 2, fillColor: color.signalRed, fillOpacity: 0.12 }).addTo(layer);
+        const line = arrived ? null : route ?? (me ? [me, place.coordinate] : null);
+        if (line) {
+          L.polyline(line.map(ll), { color: color.signalRed, weight: route ? 5 : 3, dashArray: route ? undefined : "6 8", lineCap: "round", lineJoin: "round" }).addTo(layer);
+        }
+        L.marker(ll(place.coordinate), { icon: flagIcon }).addTo(layer);
+        if (me) L.marker(ll(me), { icon: youIcon }).addTo(layer);
+        const pts = [place.coordinate, ...(me ? [me] : []), ...(route ?? [])].map(ll);
+        if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [36, 36], maxZoom: 17, animate: false });
+      }}
+    />
   );
 }
 
-export function QuestMap({ place, style }: { place: QuestPlace; me: Coordinate | null; route: Coordinate[] | null; arrived: boolean; style?: ViewStyle }) {
-  return <OsmEmbed center={place.coordinate} spanDeg={0.006} marker={place.coordinate} style={style} />;
-}
-
+/** Game over: where each of your proofs was snapped, in order. */
 export function RouteMap({ points, style }: { points: Coordinate[]; style?: ViewStyle }) {
-  if (!points.length) return <View style={[{ backgroundColor: color.paperRaised }, style]} />;
-  const lat = points.reduce((a, p) => a + p.latitude, 0) / points.length;
-  const lng = points.reduce((a, p) => a + p.longitude, 0) / points.length;
-  return <OsmEmbed center={{ latitude: lat, longitude: lng }} spanDeg={0.01} marker={points[points.length - 1]} style={style} />;
+  return (
+    <LeafletMap
+      style={style}
+      center={points[0] ?? { latitude: 37.7749, longitude: -122.4194 }}
+      zoom={15}
+      deps={[points.length]}
+      draw={(map, layer) => {
+        if (points.length > 1) L.polyline(points.map(ll), { color: color.signalRed, weight: 4, lineCap: "round", lineJoin: "round" }).addTo(layer);
+        points.forEach((p, i) => L.marker(ll(p), { icon: stepIcon(i + 1, i === points.length - 1) }).addTo(layer));
+        if (points.length > 1) map.fitBounds(L.latLngBounds(points.map(ll)), { padding: [36, 36], maxZoom: 17, animate: false });
+      }}
+    />
+  );
 }
 
-export function PickerMap({ center, pin, style }: { center: Coordinate; pin: Coordinate | null; radius: number; onPick: (c: Coordinate) => void; style?: ViewStyle }) {
-  return <OsmEmbed center={pin ?? center} spanDeg={0.008} marker={pin ?? undefined} style={style} />;
+/** Place picker: tap to drop a pin; shows the radius. */
+export function PickerMap({
+  center,
+  pin,
+  radius,
+  onPick,
+  style,
+}: {
+  center: Coordinate;
+  pin: Coordinate | null;
+  radius: number;
+  onPick: (c: Coordinate) => void;
+  style?: ViewStyle;
+}) {
+  return (
+    <LeafletMap
+      style={style}
+      center={center}
+      zoom={15}
+      onTap={onPick}
+      deps={[pin?.latitude, pin?.longitude, radius]}
+      draw={(map, layer) => {
+        L.marker(ll(center), { icon: youIcon, interactive: false }).addTo(layer);
+        if (!pin) return;
+        L.circle(ll(pin), { radius, color: color.signalRed, weight: 2, fillColor: color.signalRed, fillOpacity: 0.14, interactive: false }).addTo(layer);
+        L.marker(ll(pin), { icon: flagIcon, interactive: false }).addTo(layer);
+        map.panTo(ll(pin), { animate: false });
+      }}
+    />
+  );
 }
 
-/** The web map is view-only; the picker offers "use my spot" instead of tap-to-pin. */
-export const mapsSupportPicking = false;
+/** Tap-to-pin works on the web map too now. */
+export const mapsSupportPicking = true;

@@ -1,9 +1,11 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { TextInput, View } from "react-native";
+import { useRef, useState } from "react";
+import { View, useWindowDimensions, type TextInput } from "react-native";
+import type { ComponentRef } from "react";
 import { useSession } from "../../lib/session";
-import { halftones } from "../../ui/Halftone";
-import { Body, Display, Hairline, Label, Screen, SlabButton, color, font, space } from "../../ui/kit";
+import { NameField, useNudge } from "../../screens/Home";
+import { Annotation } from "../../ui/Annotation";
+import { Body, Button, Display, Label, Screen, color, radius, space } from "../../ui/kit";
 
 /**
  * Where a scanned invite lands: `/join/ABCD`. Opens in any phone browser (the
@@ -13,67 +15,62 @@ import { Body, Display, Hairline, Label, Screen, SlabButton, color, font, space 
 export default function JoinLink() {
   const { code: raw } = useLocalSearchParams<{ code: string }>();
   const code = (raw ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
-  const { me, setName, joinLobby, state, error } = useSession();
+  const { me, setName, joinLobby, state, error, connecting } = useSession();
+  const { width } = useWindowDimensions();
   const [draft, setDraft] = useState<string | null>(null);
-  const [joining, setJoining] = useState(false);
+  const [needName, setNeedName] = useState(false);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  const { x, nudge } = useNudge();
   const name = (draft ?? me.name).trim();
+  const w = Math.min(width, 520);
 
   // In (or already in) the lobby: the game lives on the main screen.
   if (state) return <Redirect href="/" />;
 
-  const join = async () => {
+  // Never a dead button: without a name, point at the field.
+  const join = () => {
+    if (!name) {
+      setNeedName(true);
+      nudge();
+      input.current?.focus();
+      return;
+    }
     setName(name);
-    setJoining(true);
-    // Let the name land before saying hello to the lobby.
-    await new Promise((r) => setTimeout(r, 50));
-    await joinLobby(code);
-    setJoining(false);
+    void joinLobby(code);
   };
 
   return (
     <Screen
-      index="01"
-      title="You're invited"
       tone="signal"
-      art={halftones.home}
+      stripes={{ corner: "tr", color: color.paperBright, bands: [[0.04, 0.06], [0.14, 0.03]] }}
       footer={
         <>
           {error && (
-            <View accessibilityLiveRegion="polite" style={{ backgroundColor: color.inkBlack, padding: space.m }}>
-              <Body size={14} color={color.paperBright}>
+            <View accessibilityLiveRegion="polite" style={{ backgroundColor: color.inkBlack, padding: space.m, borderRadius: radius.field }}>
+              <Body size={13} color={color.paperBright}>
                 {error}
               </Body>
             </View>
           )}
-          <SlabButton title={joining ? "Joining…" : `Join ${code}`} disabled={!name || code.length !== 4 || joining} onPress={join} />
+          <Button title={connecting ? "Joining…" : `Join ${code}`} arrow disabled={code.length !== 4 || connecting} onPress={join} />
         </>
       }
     >
       <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: "space-between" }}>
-        <View style={{ marginTop: space.l, gap: space.s }}>
-          <Label size={11}>Lobby</Label>
-          <Display size={150} style={{ letterSpacing: 4 }}>
+        <View style={{ gap: space.s, marginTop: space.s }}>
+          <Annotation lines={["You're", "invited!"]} color={color.paperBright} size={26} rotate={-6} />
+          <Display size={170} fit={w - space.gutter * 2} style={{ letterSpacing: 4, marginTop: space.m }}>
             {code || "????"}
           </Display>
-          <Body style={{ maxWidth: 300 }}>
+          <Body color={color.paperBright} style={{ maxWidth: 320 }}>
             Friends write dares, you get dealt theirs, and you prove each one with a photo before the clock runs out.
           </Body>
         </View>
-        <View style={{ gap: space.s, marginBottom: space.m }}>
-          <Label size={11}>Your name</Label>
-          <TextInput
-            value={draft ?? me.name}
-            onChangeText={setDraft}
-            placeholder="Who's playing?"
-            placeholderTextColor="rgba(255,250,246,0.55)"
-            autoCapitalize="words"
-            autoCorrect={false}
-            autoFocus={!me.name}
-            returnKeyType="go"
-            onSubmitEditing={() => name && void join()}
-            style={{ fontFamily: font.display, fontSize: 48, color: color.paperBright, paddingVertical: 4 }}
-          />
-          <Hairline emphasized />
+        <View style={{ gap: space.s, marginBottom: space.s }}>
+          <Label size={12} bold color={color.paperBright}>
+            {needName && !name ? "Add your name first" : "Your name"}
+          </Label>
+          <NameField inputRef={input} value={draft ?? me.name} onChange={setDraft} onSubmit={join} shake={x} />
         </View>
       </View>
     </Screen>

@@ -1,19 +1,21 @@
+import Feather from "@expo/vector-icons/Feather";
 import type { DevOp } from "@side-quests/game";
 import { useState } from "react";
 import { Modal, Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "../lib/session";
 import { Hairline, Label, PaletteProvider, usePalette } from "./kit";
-import { color, space } from "./theme";
+import { color, radius, space } from "./theme";
 
 /**
- * Debug shortcuts — the DEV tag sits in the header of every game screen.
- * Only shown when the server runs with DEV_TOOLS.
+ * Debug shortcuts — a small "DEV" pill in the header of every game screen.
+ * Host only, and only when the server runs with DEV_TOOLS.
  */
 export function DevMenu() {
   const { state, dev, isHost } = useSession();
   const pal = usePalette();
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
-  // Host only: these end games and add bots for everyone.
   if (!state?.devTools || !isHost) return null;
 
   const phase = state.phase;
@@ -28,22 +30,28 @@ export function DevMenu() {
       : []),
     ["Jump to verification", { op: "jump", phase: "verifying" }],
     ["Jump to scoreboard", { op: "jump", phase: "scoreboard" }],
-    ...(isHost ? ([["Add a bot", { op: "addBot" }]] as [string, DevOp][]) : []),
+    ["Add a bot", { op: "addBot" }],
   ];
 
   return (
     <>
-      <Pressable onPress={() => setOpen(true)} accessibilityLabel="Developer shortcuts" style={{ backgroundColor: pal.fg, paddingHorizontal: 6, paddingVertical: 3 }}>
-        <Label size={10} color={pal.bg}>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityLabel="Developer shortcuts"
+        hitSlop={8}
+        style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: pal.fg, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 }}
+      >
+        <Feather name="tool" size={11} color={pal.bg} />
+        <Label size={10} bold color={pal.bg}>
           Dev
         </Label>
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <PaletteProvider tone="paper">
           <Pressable style={{ flex: 1, backgroundColor: "rgba(23,17,15,0.5)", justifyContent: "flex-end" }} onPress={() => setOpen(false)}>
-            <View style={{ backgroundColor: color.paper, paddingBottom: space.xl }}>
-              <View style={{ padding: space.m }}>
-                <Label>Dev shortcuts</Label>
+            <View style={{ backgroundColor: color.paper, paddingBottom: insets.bottom + space.m, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
+              <View style={{ padding: space.m, paddingTop: space.l }}>
+                <Label bold>Dev shortcuts</Label>
               </View>
               {items.map(([title, op, disabled]) => (
                 <View key={title}>
@@ -56,7 +64,7 @@ export function DevMenu() {
                     }}
                     style={{ padding: space.m, opacity: disabled ? 0.35 : 1 }}
                   >
-                    <Label size={13} color={color.inkBlack}>
+                    <Label size={13} bold color={color.inkBlack}>
                       {title}
                     </Label>
                   </Pressable>

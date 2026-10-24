@@ -17,6 +17,7 @@ import * as Location from "expo-location";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Platform } from "react-native";
 import { describeServerError, fetchWithTimeout, serverSetupProblem, serverUrl, wsUrl } from "./config";
+import { reportError } from "./report";
 
 /**
  * A random v4 UUID. Browsers only offer crypto.randomUUID on secure pages (https
@@ -91,22 +92,43 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     locationRef.current = location;
   }, [me, location]);
   const queued = useRef<ClientMessage[]>([]);
+  /** The lobby we've received state from — to tell "connecting" from "connected". */
+  const gotState = useRef<string | null>(null);
 
-  // Identity survives restarts.
+  // Identity survives restarts. Lobby calls wait for it, so nobody joins without an id.
+  const [identity] = useState(() => {
+    let resolve!: (p: Player) => void;
+    const promise = new Promise<Player>((r) => (resolve = r));
+    return { promise, resolve };
+  });
   useEffect(() => {
     (async () => {
-      let id = await AsyncStorage.getItem("playerId");
-      if (!id) {
-        id = newId();
-        await AsyncStorage.setItem("playerId", id);
+      let player: Player;
+      try {
+        let id = await AsyncStorage.getItem("playerId");
+        if (!id) {
+          id = newId();
+          await AsyncStorage.setItem("playerId", id);
+        }
+        player = { id, name: (await AsyncStorage.getItem("playerName")) ?? "" };
+      } catch (e) {
+        // Storage blocked (private modes, some in-app browsers): play with a one-off id.
+        reportError("identity", e);
+        player = { id: newId(), name: "" };
       }
-      setMe({ id, name: (await AsyncStorage.getItem("playerName")) ?? "" });
+      // A name typed before storage answered wins.
+      player.name = meRef.current.name || player.name;
+      meRef.current = player;
+      setMe(player);
+      identity.resolve(player);
     })();
-  }, []);
+  }, [identity]);
 
   const setName = useCallback((name: string) => {
+    // Update the ref now, not after the next render: Create/Join read it right away.
+    meRef.current = { ...meRef.current, name };
     setMe((m) => ({ ...m, name }));
-    void AsyncStorage.setItem("playerName", name);
+    AsyncStorage.setItem("playerName", name).catch(() => {});
   }, []);
 
   const raw = useCallback((msg: ClientMessage) => {
@@ -116,8 +138,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(
     (code: string) => {
+      const firstTry = lobbyCode.current !== code;
       lobbyCode.current = code;
       setConnecting(true);
+      // If the lobby hasn't answered in a while, say so (we keep retrying underneath).
+      if (firstTry) {
+        setTimeout(() => {
+          if (lobbyCode.current !== code || gotState.current === code) return;
+          setError(`Still connecting to lobby ${code}… Check your connection; it'll keep trying.`);
+          reportError("connect-timeout", `no state from ${code} after 12s`, { url: wsUrl(code) });
+        }, 12_000);
+      }
       const socket = new WebSocket(wsUrl(code));
       ws.current = socket;
       socket.onopen = () => {
@@ -128,6 +159,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       socket.onmessage = (e) => {
         const msg = JSON.parse(String(e.data)) as ServerMessage;
         if (msg.type === "state") {
+          gotState.current = code;
           setClockOffset(msg.serverNow - Date.now());
           setState(msg.state);
           setConnecting(false);
@@ -157,6 +189,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const problem = serverSetupProblem();
     if (problem) return setError(problem);
     setConnecting(true);
+    await identity.promise;
     let res: Response | undefined;
     try {
       res = await fetchWithTimeout(`${serverUrl()}/api/lobbies`, { method: "POST", body: JSON.stringify({ host: meRef.current }) });
@@ -165,9 +198,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       connect(code);
     } catch (e) {
       setError(describeServerError(e, res && !res.ok ? res : undefined));
+      reportError("create", e, { status: res?.status });
       setConnecting(false);
     }
-  }, [connect]);
+  }, [connect, identity]);
 
   const joinLobby = useCallback(
     async (input: string) => {
@@ -175,17 +209,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setError(null);
       const problem = serverSetupProblem();
       if (problem) return setError(problem);
+      setConnecting(true);
+      await identity.promise;
       let res: Response | undefined;
       try {
         res = await fetchWithTimeout(`${serverUrl()}/api/lobbies/${code}`);
-        if (res.status === 404) return setError(`No lobby called ${code} — check the letters with the host.`);
+        if (res.status === 404) {
+          setConnecting(false);
+          return setError(`No lobby called ${code} — check the letters with the host.`);
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         connect(code);
       } catch (e) {
         setError(describeServerError(e, res && !res.ok ? res : undefined));
+        reportError("join", e, { code, status: res?.status });
+        setConnecting(false);
       }
     },
-    [connect],
+    [connect, identity],
   );
 
   const leave = useCallback(() => {
@@ -193,6 +234,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       ws.current.send(JSON.stringify({ type: "action", action: { type: "leave", playerId: meRef.current.id } } satisfies ClientMessage));
     }
     lobbyCode.current = null;
+    gotState.current = null;
+    setConnecting(false);
+    setError(null);
     // Anything still queued belongs to the lobby we're leaving.
     queued.current = [];
     setConnected(true);

@@ -18,10 +18,10 @@ const quiet: MapViewProps = {
 export function PlaceFlag() {
   return (
     <View style={{ alignItems: "center" }}>
-      <View style={{ width: 28, height: 28, backgroundColor: color.signalRed, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: color.signalRed, alignItems: "center", justifyContent: "center" }}>
         <Text style={{ color: color.paperBright, fontFamily: font.monoBold, fontSize: 14 }}>⚑</Text>
       </View>
-      <View style={{ width: 3, height: 10, backgroundColor: color.signalRed }} />
+      <View style={{ width: 3, height: 10, borderRadius: 1.5, backgroundColor: color.signalRed }} />
     </View>
   );
 }
@@ -31,8 +31,9 @@ function StepPin({ n, last }: { n: number; last: boolean }) {
   return (
     <View
       style={{
-        width: 24,
-        height: 24,
+        width: 26,
+        height: 26,
+        borderRadius: 13,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: last ? color.signalRed : color.paperBright,
