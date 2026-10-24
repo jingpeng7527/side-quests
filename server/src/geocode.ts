@@ -5,6 +5,19 @@
  */
 const UA = { "User-Agent": "side-quests/0.1 (party game; https://github.com/r-magnus/side-quests)" };
 
+async function geocode<T>(path: string, params: URLSearchParams): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/${path}?${params}`, { headers: UA, signal: controller.signal });
+    if (!res.ok) throw new Error(`Geocoding unavailable (${res.status})`);
+    // Read the body within the timeout too.
+    return await res.json() as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface PlaceHit {
   name: string;
   detail: string;
@@ -36,9 +49,8 @@ export async function searchPlaces(q: string, near?: [number, number]): Promise<
     // Prefer results around the player (about 5 km), without excluding the rest.
     params.set("viewbox", [lng - 0.05, lat + 0.05, lng + 0.05, lat - 0.05].join(","));
   }
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: UA });
-  if (!res.ok) return [];
-  const hits = ((await res.json()) as NominatimPlace[]).map((p) => ({
+  const places = await geocode<NominatimPlace[]>("search", params);
+  const hits = places.map((p) => ({
     name: shortName(p),
     detail: detail(p),
     latitude: Number(p.lat),
@@ -52,9 +64,7 @@ export async function searchPlaces(q: string, near?: [number, number]): Promise<
 /** A short human name for a dropped pin: a place name, or the street. */
 export async function nameSpot(lat: number, lng: number): Promise<string | null> {
   const params = new URLSearchParams({ lat: String(lat), lon: String(lng), format: "jsonv2", zoom: "18", addressdetails: "1" });
-  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, { headers: UA });
-  if (!res.ok) return null;
-  const p = (await res.json()) as NominatimPlace & { error?: string };
+  const p = await geocode<NominatimPlace & { error?: string }>("reverse", params);
   if (p.error) return null;
   return p.name || p.address?.road || p.address?.neighbourhood || p.display_name?.split(",")[0] || null;
 }

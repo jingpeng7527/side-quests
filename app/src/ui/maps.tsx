@@ -110,28 +110,42 @@ export function RouteMap({ points, style }: { points: Coordinate[]; style?: View
 /** Place picker: tap to drop a pin; shows the radius. */
 export function PickerMap({
   center,
+  zoom = 15,
   pin,
   radius,
   onPick,
+  onUserMove,
+  showUserLocation = true,
   style,
 }: {
   center: Coordinate;
+  zoom?: number;
   pin: Coordinate | null;
   radius: number;
   onPick: (c: Coordinate) => void;
+  onUserMove?: () => void;
+  showUserLocation?: boolean;
   style?: ViewStyle;
 }) {
   const map = useRef<MapView>(null);
+  const centerKey = `${center.latitude},${center.longitude}`;
+  const previousCenter = useRef(centerKey);
   useEffect(() => {
     if (pin) map.current?.animateCamera({ center: ll(pin) }, { duration: 300 });
   }, [pin?.latitude, pin?.longitude]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (previousCenter.current === centerKey || pin) return;
+    previousCenter.current = centerKey;
+    map.current?.animateToRegion({ ...ll(center), latitudeDelta: zoom === 2 ? 120 : 0.016, longitudeDelta: zoom === 2 ? 240 : 0.016 }, 450);
+  }, [centerKey, pin, zoom]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <MapView
       ref={map}
       style={style}
       {...quiet}
-      showsUserLocation
-      initialRegion={{ ...ll(center), latitudeDelta: 0.016, longitudeDelta: 0.016 }}
+      showsUserLocation={showUserLocation}
+      initialRegion={{ ...ll(center), latitudeDelta: zoom === 2 ? 120 : 0.016, longitudeDelta: zoom === 2 ? 240 : 0.016 }}
+      onPanDrag={onUserMove}
       onPress={(e) => onPick(e.nativeEvent.coordinate)}
     >
       {pin && (

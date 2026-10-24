@@ -43,10 +43,12 @@ The app finds the server on the same machine that serves the JS bundle, so simul
 ## Testing
 
 ```sh
-npm test            # game rules (vitest)
+npm test            # game rules + geocoding (Node 24)
 npm run typecheck   # all workspaces
 cd app && npx expo lint
 ```
+
+The repeatable phone-browser check is documented in [docs/mobile-testing.md](docs/mobile-testing.md). The checkpoint continuation and verified results are in [docs/checkpoint-continuation.md](docs/checkpoint-continuation.md).
 
 **Solo play:** in a lobby, tap **+ Add a bot**. Bots write quests, complete them with stand-in photos, and vote.
 
@@ -79,8 +81,8 @@ It prints your permanent address, `https://side-quests.<your-subdomain>.workers.
 
 ## Notes and limits
 
-- **Maps:** react-native-maps (Apple Maps on iOS, Google Maps on Android). Android builds (not Expo Go) need a Google Maps API key via `GOOGLE_MAPS_ANDROID_API_KEY` — see the phone guide. On web, maps are view-only OpenStreetMap embeds and the place picker offers "use my spot" instead of search and tap-to-pin.
+- **Maps:** react-native-maps (Apple Maps on iOS, Google Maps on Android). Android builds (not Expo Go) need a Google Maps API key via `GOOGLE_MAPS_ANDROID_API_KEY` — see the phone guide. On web, interactive Leaflet maps use OpenStreetMap tiles with a paper tint. The place picker supports tapping a pin, searching, and "use my spot".
 - **Walking routes** come from the free FOSSGIS OSRM router (OpenStreetMap data, fair-use). Swap in a keyed provider or self-hosted OSRM before launch.
-- **Place search** uses the phone's geocoder (`expo-location`), which finds addresses and well-known landmarks rather than any business by name.
+- **Place search and automatic pin names** use the server’s `/api/geocode` endpoint backed by OpenStreetMap Nominatim on every platform. If the provider is unavailable, map pins and manual names still work; search shows an availability error.
 - **Photos** are downscaled on the phone and stored with their lobby; the game state only carries their paths. A lobby and its photos are deleted 24 hours after anything last happened in it.
 - **Hosting** passes to another player if the host's phone has been away for a minute, so a game never stalls.

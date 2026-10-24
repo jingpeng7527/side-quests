@@ -1,5 +1,6 @@
 import Feather from "@expo/vector-icons/Feather";
-import { DEFAULT_LOCATION, PLACE_RADIUS_OPTIONS, distance, formatDistance, readiness, type Coordinate, type GameState, type Quest, type QuestPlace } from "@side-quests/game";
+import { PLACE_RADIUS_OPTIONS, distance, formatDistance, readiness, type Coordinate, type GameState, type Quest, type QuestPlace } from "@side-quests/game";
+import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 import { searchPlaces, nameSpot, type PlaceHit } from "../lib/geo";
@@ -138,10 +139,9 @@ export function QuestsScreen() {
             accessibilityLabel="New quest"
             style={{ fontFamily: font.body, fontSize: 16, lineHeight: 23, color: color.inkBlack, minHeight: 72, textAlignVertical: "top" }}
           />
+          {draftPlace && <PlaceChip place={draftPlace} onRemove={() => setDraftPlace(undefined)} />}
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
-            {draftPlace ? (
-              <PlaceChip place={draftPlace} onRemove={() => setDraftPlace(undefined)} />
-            ) : (
+            {!draftPlace && (
               <Pressable onPress={() => setPicking(true)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 }}>
                 <Feather name="map-pin" size={15} color={color.signalRed} />
                 <Label size={11} bold color={color.signalRed}>
@@ -207,49 +207,149 @@ export function PlaceChip({ place, onRemove }: { place: QuestPlace; onRemove?: (
 
 /** Pin a quest to a spot: search, tap the map, or use where you're standing. */
 function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestPlace | undefined) => void }) {
-  const { location } = useGame();
+  const { location: gameLocation } = useGame();
+  const [pickerLocation, setPickerLocation] = useState<Coordinate | null>(gameLocation);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const mapTouched = useRef(false);
+  const [manualMapCenter, setManualMapCenter] = useState<Coordinate | null>(null);
   const [pin, setPin] = useState<Coordinate | null>(null);
   const [name, setName] = useState("");
-  const [named, setNamed] = useState(false); // did the player type a name themselves?
+  const named = useRef(false); // manual names survive map taps
+  const nameRequest = useRef(0);
+  const searchRequest = useRef(0);
   const [radiusM, setRadius] = useState(100);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const center = location ?? DEFAULT_LOCATION;
+  // A neutral world view keeps manual pinning available without implying that
+  // San Francisco (the game demo location) is the player's current location.
+  const currentLocation = pickerLocation ?? gameLocation;
+  const worldCenter = { latitude: 0, longitude: 0 };
+  const center = manualMapCenter ?? currentLocation ?? worldCenter;
+
+  const keepMapPosition = () => {
+    if (mapTouched.current) return;
+    mapTouched.current = true;
+    setManualMapCenter(currentLocation ?? worldCenter);
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    mapTouched.current = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setLocationError(null);
+        setLocating(true);
+      }
+    });
+
+    const locate = async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (!permission.granted) {
+          if (!cancelled) {
+            setLocationError("Location permission is off. Search for a place or move the map to choose one.");
+            setLocating(false);
+          }
+          return;
+        }
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) throw new Error("Location services are off.");
+
+        const current = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced, mayShowUserSettingsDialog: false });
+        const deadline = new Promise<null>((resolve) => {
+          timeout = setTimeout(() => resolve(null), 12_000);
+        });
+        const fix = await Promise.race([current, deadline]);
+        if (timeout) clearTimeout(timeout);
+
+        const applyFix = (position: Location.LocationObject) => {
+          if (cancelled) return;
+          const coordinate = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+          setPickerLocation(coordinate);
+          setLocationError(null);
+          setLocating(false);
+        };
+        if (fix) {
+          applyFix(fix);
+        } else if (!cancelled) {
+          setLocationError("Still looking for your location. Search or move the map to choose a place.");
+          setLocating(false);
+          // A slow GPS fix can still improve the map if the player hasn't moved it.
+          void current.then(applyFix).catch(() => {});
+        }
+      } catch {
+        if (!cancelled) {
+          setLocationError("Couldn't find your location. Search or move the map to choose a place.");
+          setLocating(false);
+        }
+      }
+    };
+    void locate();
+    return () => {
+      cancelled = true;
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [visible]);
+
+  // Ignore replies belonging to an older pin, query, or closed picker.
+  useEffect(() => () => {
+    nameRequest.current++;
+    searchRequest.current++;
+  }, []);
 
   const drop = async (c: Coordinate, label?: string) => {
-    setPin(c);
+    keepMapPosition();
+    const request = ++nameRequest.current;
+    searchRequest.current++;
+    setSearching(false);
+    setSearchError(null);
+    setPin({ latitude: c.latitude, longitude: c.longitude });
     setResults(null);
     if (label) {
+      named.current = false;
       setName(label);
       return;
     }
-    if (!named) setName("Dropped pin");
+    if (named.current) return;
+    setName("Dropped pin");
     const spot = await nameSpot(c);
-    if (spot && !named) setName(spot);
+    if (spot && request === nameRequest.current && !named.current) setName(spot);
   };
 
   const search = async () => {
     if (!query.trim()) return;
+    const request = ++searchRequest.current;
+    setResults(null);
     setSearchError(null);
     setSearching(true);
     try {
-      const hits = await searchPlaces(query.trim(), location);
+      const hits = await searchPlaces(query.trim(), currentLocation);
+      if (request !== searchRequest.current) return;
       setResults(hits);
-      if (!hits.length) setSearchError("No match nearby — try another name, or tap the map.");
+      if (!hits.length) setSearchError("No match — try another name, or tap the map.");
     } catch {
+      if (request !== searchRequest.current) return;
       setSearchError("Search isn't working right now — tap the map instead.");
     } finally {
-      setSearching(false);
+      if (request === searchRequest.current) setSearching(false);
     }
   };
 
   const close = (p?: QuestPlace) => {
+    nameRequest.current++;
+    searchRequest.current++;
+    setSearching(false);
+    mapTouched.current = false;
+    setManualMapCenter(null);
     onDone(p);
     setPin(null);
     setName("");
-    setNamed(false);
+    named.current = false;
     setQuery("");
     setResults(null);
     setSearchError(null);
@@ -274,7 +374,13 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
             <Feather name="search" size={18} color={color.stone} />
             <TextInput
               value={query}
-              onChangeText={setQuery}
+              onChangeText={(text) => {
+                searchRequest.current++;
+                setSearching(false);
+                setResults(null);
+                setSearchError(null);
+                setQuery(text);
+              }}
               onSubmitEditing={search}
               returnKeyType="search"
               placeholder="Search a café, park, street…"
@@ -288,7 +394,17 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
           {searchError && <Body size={13} color={color.signalRed}>{searchError}</Body>}
 
           <View style={{ flex: 1, minHeight: 220, borderRadius: radius.card, overflow: "hidden", borderWidth: 2, borderColor: color.inkBlack }}>
-            <PickerMap style={{ flex: 1 }} center={center} pin={pin} radius={radiusM} onPick={(c) => void drop(c)} />
+            <PickerMap
+              style={{ flex: 1 }}
+              key={visible ? "open" : "closed"}
+              center={center}
+              zoom={currentLocation ? 15 : 2}
+              pin={pin}
+              radius={radiusM}
+              showUserLocation={!!pickerLocation}
+              onPick={(c) => void drop(c)}
+              onUserMove={keepMapPosition}
+            />
             {results && results.length > 0 && (
               <ScrollView style={{ position: "absolute", left: 8, right: 8, top: 8, maxHeight: 220, backgroundColor: color.paperBright, borderRadius: radius.field }} keyboardShouldPersistTaps="handled">
                 {results.map((hit, i) => (
@@ -297,7 +413,7 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
                       {hit.name}
                     </Body>
                     <Label size={10} numberOfLines={1}>
-                      {[location ? formatDistance(distance(location, hit)) : null, hit.detail].filter(Boolean).join(" · ")}
+                      {[currentLocation ? formatDistance(distance(currentLocation, hit)) : null, hit.detail].filter(Boolean).join(" · ")}
                     </Label>
                   </Pressable>
                 ))}
@@ -324,23 +440,31 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
             ))}
           </View>
 
+          {locating && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }} accessibilityLiveRegion="polite">
+              <ActivityIndicator color={color.signalRed} />
+              <Body size={12} color={color.stone}>{currentLocation ? "Updating your location…" : "Finding your location…"}</Body>
+            </View>
+          )}
+          {locationError && <Body size={12} color={color.stone} accessibilityLiveRegion="polite">{locationError}</Body>}
           {pin ? (
             <View style={{ gap: 4 }}>
               <TextInput
                 value={name}
                 onChangeText={(t) => {
                   setName(t);
-                  setNamed(true);
+                  named.current = true;
+                  nameRequest.current++;
                 }}
                 placeholder="Name this spot"
                 placeholderTextColor={color.stone}
                 accessibilityLabel="Name this spot"
                 style={{ fontFamily: font.bodyMedium, fontSize: 17, color: color.inkBlack, backgroundColor: color.paperBright, borderRadius: radius.field, paddingHorizontal: space.m, paddingVertical: 12 }}
               />
-              {location && <Label size={10}>{formatDistance(distance(location, pin))} from you</Label>}
+              {currentLocation && <Label size={10}>{formatDistance(distance(currentLocation, pin))} from you</Label>}
             </View>
           ) : (
-            <Button title="Use my spot" kind="outline" icon="crosshair" size="md" disabled={!location} onPress={() => location && void drop(location, "Right here")} />
+            <Button title="Use my spot" kind="outline" icon="crosshair" size="md" disabled={!currentLocation} onPress={() => currentLocation && void drop(currentLocation, "Right here")} />
           )}
         </View>
       </Screen>
