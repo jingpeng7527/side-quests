@@ -23,6 +23,30 @@ export const PLACE_RADIUS_OPTIONS = [50, 100, 250] as const;
 
 export type QuestSource = "human" | "ai";
 
+/**
+ * How hard a quest is, and so what it's worth. Each factor is 1 (trivial) to
+ * 5 (brutal); points come from the factors unless the host set them by hand.
+ */
+export interface QuestDifficulty {
+  /** How long it takes to pull off. */
+  time: number;
+  /** How socially awkward or embarrassing it is. */
+  nerve: number;
+  /** Physical effort, travel, props, logistics. */
+  effort: number;
+  /** 1–5. */
+  points: number;
+  /** One short line on why — shown to the host in review. */
+  why?: string;
+  /** Who set the points: the AI rater, the offline estimate, or the host. */
+  by: "ai" | "estimate" | "host";
+}
+
+export const MIN_POINTS = 1;
+export const MAX_POINTS = 5;
+/** What an unrated quest is worth while its rating is on the way. */
+export const DEFAULT_POINTS = 2;
+
 export interface Quest {
   id: ID;
   text: string;
@@ -32,6 +56,8 @@ export interface Quest {
   source: QuestSource;
   /** Whether the host kept this quest in the deck during review. */
   included: boolean;
+  /** Filled in by the server shortly after the quest is added; adjustable by the host. */
+  difficulty?: QuestDifficulty;
 }
 
 export interface GameSettings {
@@ -42,6 +68,8 @@ export interface GameSettings {
   aiRefill: boolean;
   /** Quests the AI writes up front, before the game starts. */
   aiStarterCount: number;
+  /** Harder quests are worth more points. Off: every quest is worth 1. */
+  difficultyScoring: boolean;
 }
 
 export const DURATION_OPTIONS = [2, 5, 10, 15, 30, 60] as const;
@@ -64,6 +92,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   maxSkips: 3,
   aiRefill: true,
   aiStarterCount: 3,
+  difficultyScoring: true,
 };
 
 /** A real photo in storage (url is server-relative: /api/photos/…), or a generated stand-in (bots, devices without a camera). */
@@ -123,6 +152,8 @@ export type Action =
   | { type: "setReady"; playerId: ID; ready: boolean }
   | { type: "setAway"; playerId: ID; away: boolean }
   | { type: "setHost"; playerId: ID }
+  | { type: "rateQuests"; ratings: { questId: ID; difficulty: QuestDifficulty }[] }
+  | { type: "setQuestPoints"; questId: ID; points: number }
   | { type: "updateSettings"; settings: GameSettings }
   | { type: "addQuest"; quest: Quest }
   | { type: "removeQuest"; questId: ID }

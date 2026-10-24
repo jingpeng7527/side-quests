@@ -64,10 +64,14 @@ async function route(request: Request, env: Env): Promise<Response> {
       return n && n.length === 2 && !n.some(Number.isNaN) ? (n as [number, number]) : undefined;
     };
     const at = pair(url.searchParams.get("at"));
-    if (at) return Response.json({ name: await nameSpot(at[0], at[1]) });
     const q = url.searchParams.get("q")?.trim();
-    if (!q) return new Response("q or at required", { status: 400 });
-    return Response.json(await searchPlaces(q.slice(0, 120), pair(url.searchParams.get("near"))));
+    if (!at && !q) return new Response("q or at required", { status: 400 });
+    try {
+      if (at) return Response.json({ name: await nameSpot(at[0], at[1]) });
+      return Response.json(await searchPlaces(q!.slice(0, 120), pair(url.searchParams.get("near"))));
+    } catch {
+      return new Response("Place lookup is temporarily unavailable", { status: 503 });
+    }
   }
 
   // POST /api/log — the app reports its own errors here, so they show up in Cloudflare's logs.

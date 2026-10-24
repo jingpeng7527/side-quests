@@ -55,6 +55,8 @@ function LeafletMap({
   draw,
   deps,
   onTap,
+  onUserMove,
+  centerKey,
 }: {
   style?: ViewStyle;
   center: Coordinate;
@@ -62,15 +64,22 @@ function LeafletMap({
   draw: (map: L.Map, layer: L.LayerGroup) => void;
   deps: unknown[];
   onTap?: (c: Coordinate) => void;
+  onUserMove?: () => void;
+  centerKey?: string;
 }) {
   const el = useRef<HTMLDivElement | null>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
   // The click handler is bound once; it reads the latest onTap through this ref.
   const tap = useRef(onTap);
+  const moved = useRef(onUserMove);
+  const initialView = useRef({ centerKey, zoom });
   useEffect(() => {
     tap.current = onTap;
   }, [onTap]);
+  useEffect(() => {
+    moved.current = onUserMove;
+  }, [onUserMove]);
 
   useEffect(() => {
     injectStyles();
@@ -82,18 +91,32 @@ function LeafletMap({
       className: "sq-tiles",
     }).addTo(m);
     m.on("click", (e: L.LeafletMouseEvent) => tap.current?.({ latitude: e.latlng.lat, longitude: e.latlng.lng }));
+    m.on("dragstart zoomstart", () => moved.current?.());
     layer.current = L.layerGroup().addTo(m);
     map.current = m;
     // The View may still be sizing itself.
     const resize = setTimeout(() => m.invalidateSize(), 50);
+    // Pin fields, search feedback and the phone keyboard change the map's size
+    // after mount. Keep Leaflet's pixel-to-coordinate calculations in sync.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => m.invalidateSize({ animate: false }));
+    observer?.observe(el.current);
     return () => {
       clearTimeout(resize);
+      observer?.disconnect();
       // Stop any pan/zoom in flight first: removing a map mid-animation throws.
       m.stop();
       m.remove();
       map.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!map.current || centerKey === undefined) return;
+    const previous = initialView.current;
+    if (previous.centerKey === centerKey && previous.zoom === zoom) return;
+    initialView.current = { centerKey, zoom };
+    map.current.setView(ll(center), zoom, { animate: false });
+  }, [centerKey, zoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!map.current || !layer.current) return;
@@ -155,26 +178,34 @@ export function RouteMap({ points, style }: { points: Coordinate[]; style?: View
 /** Place picker: tap to drop a pin; shows the radius. */
 export function PickerMap({
   center,
+  zoom = 15,
   pin,
   radius,
   onPick,
+  onUserMove,
+  showUserLocation = true,
   style,
 }: {
   center: Coordinate;
+  zoom?: number;
   pin: Coordinate | null;
   radius: number;
   onPick: (c: Coordinate) => void;
+  onUserMove?: () => void;
+  showUserLocation?: boolean;
   style?: ViewStyle;
 }) {
   return (
     <LeafletMap
       style={style}
       center={center}
-      zoom={15}
+      zoom={zoom}
       onTap={onPick}
-      deps={[pin?.latitude, pin?.longitude, radius]}
+      onUserMove={onUserMove}
+      centerKey={`${center.latitude},${center.longitude}`}
+      deps={[pin?.latitude, pin?.longitude, radius, showUserLocation]}
       draw={(map, layer) => {
-        L.marker(ll(center), { icon: youIcon, interactive: false }).addTo(layer);
+        if (showUserLocation) L.marker(ll(center), { icon: youIcon, interactive: false }).addTo(layer);
         if (!pin) return;
         L.circle(ll(pin), { radius, color: color.signalRed, weight: 2, fillColor: color.signalRed, fillOpacity: 0.14, interactive: false }).addTo(layer);
         L.marker(ll(pin), { icon: flagIcon, interactive: false }).addTo(layer);

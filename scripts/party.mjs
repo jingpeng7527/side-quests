@@ -22,6 +22,12 @@ const PORT = 8787;
 // 127.0.0.1, not localhost: on macOS localhost resolves to IPv6 first, where the server isn't listening.
 const LOCAL_SERVER = `http://127.0.0.1:${PORT}`;
 const children = [];
+// On Windows, npm and npx are .cmd shims that need a shell to launch.
+const WIN = process.platform === "win32";
+const INSTALL_CLOUDFLARED = {
+  darwin: "brew install cloudflared",
+  win32: "winget install --id Cloudflare.cloudflared",
+}[process.platform] ?? "see https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
 
 const say = (msg) => console.log(`\x1b[31m▌\x1b[0m ${msg}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -79,7 +85,7 @@ if (!args.has("--skip-build")) {
   say("Building the web app…");
   const env = { ...process.env };
   delete env.EXPO_PUBLIC_SERVER_URL;
-  const build = spawnSync("npx", ["expo", "export", "--platform", "web"], { cwd: join(root, "app"), env, stdio: ["ignore", "ignore", "inherit"] });
+  const build = spawnSync("npx", ["expo", "export", "--platform", "web"], { cwd: join(root, "app"), env, stdio: ["ignore", "ignore", "inherit"], shell: WIN });
   if (build.status !== 0) {
     console.error("✘ Web build failed (see above).");
     process.exit(1);
@@ -91,7 +97,7 @@ if (await healthy(LOCAL_SERVER)) {
   say(`Game server already running on port ${PORT}${args.has("--skip-build") ? "" : " (refresh open pages to get the new build)"}.`);
 } else {
   say("Starting the game server…");
-  const server = spawn("npm", ["run", "dev", "-w", "server"], { cwd: root, stdio: ["ignore", "ignore", "inherit"], detached: true });
+  const server = spawn("npm", ["run", "dev", "-w", "server"], { cwd: root, stdio: ["ignore", "ignore", "inherit"], detached: !WIN, shell: WIN });
   children.push(server);
   server.on("exit", (code) => {
     if (stopping) return;
@@ -112,7 +118,7 @@ if (local) {
   publicUrl = `http://${ip}:${PORT}`;
 } else {
   if (spawnSync("cloudflared", ["--version"], { stdio: "ignore" }).error) {
-    console.error("✘ cloudflared isn't installed. Run `brew install cloudflared`, or use `npm run party:local` for same-Wi-Fi play.");
+    console.error(`✘ cloudflared isn't installed. Install it (${INSTALL_CLOUDFLARED}), or use \`npm run party:local\` for same-Wi-Fi play.`);
     shutdown(1);
   }
   say("Opening a public tunnel…");
@@ -121,7 +127,7 @@ if (local) {
   const protocol = process.env.PARTY_TUNNEL_PROTOCOL ?? "http2";
   const tunnel = spawn("cloudflared", ["tunnel", "--no-autoupdate", "--protocol", protocol, "--url", LOCAL_SERVER], {
     stdio: ["ignore", "pipe", "pipe"],
-    detached: true,
+    detached: !WIN,
   });
   children.push(tunnel);
   const recent = []; // cloudflared's last lines, shown if something goes wrong
@@ -183,6 +189,6 @@ console.log("");
 say(`\x1b[1mScan to play:\x1b[0m ${publicUrl}`);
 say("The QR code just opened in your browser — put it on screen for everyone.");
 say("Everyone opens it in their phone browser (camera app → tap the link). No app, no account.");
-say("One person taps Create lobby; the lobby screen has its own QR code and an Invite link for everyone else.");
+say("One person taps Host a lobby; the lobby screen has its own QR code and an Invite friends link for everyone else.");
 if (local) say("Same Wi-Fi only. Location-based quests need the public link (`npm run party`) — browsers only share location over https.");
 else say("Anyone with this link can reach your game while this runs. Ctrl+C ends the party.");

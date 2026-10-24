@@ -20,14 +20,7 @@
     <meta property="og:title" content="Side Quests" />
     <meta property="og:description" content="You're invited — write dares, get dealt your friends', prove it with a photo." />
     <meta property="og:image" content="/icon-512.png" />
-    <!-- Small fallbacks for older phones' browsers (iOS before 15.4 lacks these). -->
-    <script>
-      if (!Array.prototype.findLast) Object.defineProperty(Array.prototype, "findLast", { configurable: true, writable: true, value: function (f, t) { for (var i = this.length - 1; i >= 0; i--) if (f.call(t, this[i], i, this)) return this[i]; } });
-      if (!Array.prototype.findLastIndex) Object.defineProperty(Array.prototype, "findLastIndex", { configurable: true, writable: true, value: function (f, t) { for (var i = this.length - 1; i >= 0; i--) if (f.call(t, this[i], i, this)) return i; return -1; } });
-      if (!Array.prototype.at) Object.defineProperty(Array.prototype, "at", { configurable: true, writable: true, value: function (n) { n = Math.trunc(n) || 0; if (n < 0) n += this.length; return this[n]; } });
-      if (!Object.hasOwn) Object.hasOwn = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
-    </script>
-    <!-- Small fallbacks for older phones' browsers (iOS before 15.4 lacks these). -->
+    <!-- Small fallbacks for older phones' browsers (availability varies by browser version). -->
     <script>
       if (!Array.prototype.findLast) Object.defineProperty(Array.prototype, "findLast", { configurable: true, writable: true, value: function (f, t) { for (var i = this.length - 1; i >= 0; i--) if (f.call(t, this[i], i, this)) return this[i]; } });
       if (!Array.prototype.findLastIndex) Object.defineProperty(Array.prototype, "findLastIndex", { configurable: true, writable: true, value: function (f, t) { for (var i = this.length - 1; i >= 0; i--) if (f.call(t, this[i], i, this)) return i; return -1; } });

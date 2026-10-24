@@ -23,7 +23,8 @@ import {
 } from "@side-quests/game";
 import { Bots } from "./bots";
 import { saveToCatalog } from "./catalog";
-import { writeQuests } from "./quests";
+import { DEFAULT_MODEL, writeQuests } from "./quests";
+import { rateQuests } from "./ratings";
 
 export interface Env {
   LOBBY: DurableObjectNamespace<Lobby>;
@@ -51,6 +52,9 @@ export class Lobby extends DurableObject<Env> {
   private sockets = new Map<WebSocket, string>();
   /** When anything last happened here; the lobby is deleted LOBBY_TTL_MS after. */
   private lastActivity = Date.now();
+  /** Quests being rated right now, and the timer that batches the next lot. */
+  private rating = new Set<string>();
+  private rateTimer: ReturnType<typeof setTimeout> | null = null;
   /** When a top-up adds nothing new (deck exhausted, duplicates), wait before asking again. */
   private aiRetryAfter = 0;
   private bots = new Bots(this);
@@ -236,6 +240,7 @@ export class Lobby extends DurableObject<Env> {
       if (next.phase === "scoreboard") this.ctx.waitUntil(saveToCatalog(this.env.CATALOG, next));
     }
     if (action.type === "requestPhase" && next.transition) this.landTransition(next.transition);
+    if (action.type === "addQuest" || action.type === "addAIQuests" || (next.phase === "review" && prev.phase !== "review")) this.rateSoon();
     if (action.type === "setAway" && action.away && action.playerId === next.hostId) this.handOffHostLater();
     this.topUpQuests();
   }
@@ -323,6 +328,34 @@ export class Lobby extends DurableObject<Env> {
         this.dispatch({ type: "addAIQuests", quests }, "server");
         if ((this.state?.quests.length ?? 0) > before) this.aiRetryAfter = 0;
       }),
+    );
+  }
+
+  // MARK: Difficulty ratings
+
+  /** Rate unrated quests shortly — batching quests written in quick succession into one AI call. */
+  private rateSoon() {
+    if (this.rateTimer) clearTimeout(this.rateTimer);
+    this.rateTimer = setTimeout(() => {
+      this.rateTimer = null;
+      this.rateUnrated();
+    }, 1500);
+  }
+
+  private rateUnrated() {
+    const s = this.state;
+    if (!s) return;
+    const todo = s.quests.filter((q) => !q.difficulty && !this.rating.has(q.id)).slice(0, 25);
+    if (!todo.length) return;
+    for (const q of todo) this.rating.add(q.id);
+    this.ctx.waitUntil(
+      rateQuests({ apiKey: this.env.OPENAI_API_KEY, model: this.env.OPENAI_MODEL || DEFAULT_MODEL }, todo)
+        .then((ratings) => this.dispatch({ type: "rateQuests", ratings }, "server"))
+        .finally(() => {
+          for (const q of todo) this.rating.delete(q.id);
+          // More may have arrived (or a batch was capped) while this one ran.
+          if (this.state?.quests.some((q) => !q.difficulty && !this.rating.has(q.id))) this.rateSoon();
+        }),
     );
   }
 

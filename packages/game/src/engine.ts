@@ -1,5 +1,5 @@
-import type { Action, GameState, ID, Phase, Player, Submission } from "./types";
-import { DEFAULT_SETTINGS, SUBMIT_GRACE_MS, TRANSITION_MS } from "./types";
+import type { Action, GameState, ID, Phase, Player, Quest, QuestDifficulty, Submission } from "./types";
+import { DEFAULT_POINTS, DEFAULT_SETTINGS, MAX_POINTS, MIN_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS } from "./types";
 
 /** Who sent an action: a player id, or the server itself (bots, AI, clock). */
 export type Actor = ID | "server";
@@ -25,8 +25,8 @@ export function newGame(code: string, host: Player, opts: { aiMode: GameState["a
 
 // The host moves the game along with requestPhase; the server lands it (setPhase /
 // startGame) after everyone has had a few seconds' warning.
-const HOST_ONLY = new Set<Action["type"]>(["requestPhase", "cancelTransition", "updateSettings", "toggleQuest"]);
-const SERVER_ONLY = new Set<Action["type"]>(["addAIQuests", "setAIWriting", "setPhase", "startGame", "setAway", "setHost"]);
+const HOST_ONLY = new Set<Action["type"]>(["requestPhase", "cancelTransition", "updateSettings", "toggleQuest", "setQuestPoints"]);
+const SERVER_ONLY = new Set<Action["type"]>(["addAIQuests", "setAIWriting", "setPhase", "startGame", "setAway", "setHost", "rateQuests"]);
 
 /** Whether `actor` may perform `action`. The server may do anything. */
 export function authorize(state: GameState, action: Action, actor: Actor): boolean {
@@ -110,6 +110,28 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
       if (!!s.ready[action.playerId] === action.ready) return prev;
       s.ready[action.playerId] = action.ready;
       return s;
+
+    case "rateQuests": {
+      let changed = false;
+      for (const { questId, difficulty } of action.ratings) {
+        const q = s.quests.find((x) => x.id === questId);
+        // Never overwrite the host's call.
+        if (!q || q.difficulty?.by === "host") continue;
+        q.difficulty = normalizeDifficulty(difficulty);
+        changed = true;
+      }
+      return changed ? s : prev;
+    }
+
+    case "setQuestPoints": {
+      const q = s.quests.find((x) => x.id === action.questId);
+      // Points are settled once the game starts.
+      if (!q || !["lobby", "writing", "review"].includes(s.phase)) return prev;
+      const points = clampPoints(action.points);
+      const base = q.difficulty ?? { time: 3, nerve: 3, effort: 3, points };
+      q.difficulty = { ...base, points, by: "host" };
+      return s;
+    }
 
     case "setHost":
       if (s.hostId === action.playerId || !s.players.some((p) => p.id === action.playerId)) return prev;
@@ -280,14 +302,60 @@ export const rejections = (sub: Submission) => Object.values(sub.votes).filter((
 /** Benefit of the doubt: a tie (including no votes) counts. */
 export const isVerified = (sub: Submission) => approvals(sub) >= rejections(sub);
 
-export function score(s: GameState, playerId: ID): number {
-  return s.submissions.filter((x) => x.playerId === playerId && isVerified(x)).length;
+// Difficulty and points
+
+const clampFactor = (n: number) => Math.min(5, Math.max(1, Math.round(Number(n) || 3)));
+export const clampPoints = (n: number) => Math.min(MAX_POINTS, Math.max(MIN_POINTS, Math.round(Number(n) || DEFAULT_POINTS)));
+
+/**
+ * Points from the three factors (each 1–5): their average, mapped onto 1–5 —
+ * so a quest that's quick, painless and easy is 1, and maxed on all three is 5.
+ */
+export function pointsFor(d: Pick<QuestDifficulty, "time" | "nerve" | "effort">): number {
+  const sum = clampFactor(d.time) + clampFactor(d.nerve) + clampFactor(d.effort);
+  return clampPoints(1 + (sum - 3) / 3);
 }
 
-export function ranking(s: GameState): { player: Player; score: number }[] {
+/** Clamp factors, derive points, trim the reason — so a rating from anywhere is safe to store. */
+export function normalizeDifficulty(d: QuestDifficulty): QuestDifficulty {
+  const factors = { time: clampFactor(d.time), nerve: clampFactor(d.nerve), effort: clampFactor(d.effort) };
+  return {
+    ...factors,
+    points: d.by === "host" ? clampPoints(d.points) : pointsFor(factors),
+    why: d.why ? String(d.why).trim().slice(0, 120) : undefined,
+    by: d.by,
+  };
+}
+
+/** What completing this quest is worth in this game. */
+export function questPoints(s: GameState, q: Quest | undefined): number {
+  if (!q) return 0;
+  if (s.settings.difficultyScoring === false) return 1;
+  return q.difficulty?.points ?? DEFAULT_POINTS;
+}
+
+/** Points from a player's verified proofs. */
+export function score(s: GameState, playerId: ID): number {
+  return s.submissions
+    .filter((x) => x.playerId === playerId && isVerified(x))
+    .reduce((sum, x) => sum + questPoints(s, s.quests.find((q) => q.id === x.questId)), 0);
+}
+
+/** Points a player has claimed so far (before voting) — for the live standings. */
+export function claimedPoints(s: GameState, playerId: ID): number {
+  return s.submissions
+    .filter((x) => x.playerId === playerId)
+    .reduce((sum, x) => sum + questPoints(s, s.quests.find((q) => q.id === x.questId)), 0);
+}
+
+export function ranking(s: GameState): { player: Player; score: number; verified: number }[] {
   return s.players
-    .map((player) => ({ player, score: score(s, player.id) }))
-    .sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name));
+    .map((player) => ({
+      player,
+      score: score(s, player.id),
+      verified: s.submissions.filter((x) => x.playerId === player.id && isVerified(x)).length,
+    }))
+    .sort((a, b) => b.score - a.score || b.verified - a.verified || a.player.name.localeCompare(b.player.name));
 }
 
 function pickRandom<T>(xs: T[], rand: () => number): T | undefined {

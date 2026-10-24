@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { acceptingProofs, apply, authorize, freshQuestCount, newGame, nextHost, ranking, readiness } from "./engine";
-import { SUBMIT_GRACE_MS, TRANSITION_MS, type GameState, type Player, type Quest, type Submission } from "./types";
+import { acceptingProofs, apply, authorize, claimedPoints, freshQuestCount, newGame, nextHost, pointsFor, ranking, readiness } from "./engine";
+import { DEFAULT_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS, type GameState, type Player, type Quest, type QuestDifficulty, type Submission } from "./types";
 
 const host: Player = { id: "host", name: "Ryan" };
 const ana: Player = { id: "ana", name: "Ana" };
@@ -132,7 +132,8 @@ describe("voting and scoring", () => {
     s = apply(s, { type: "vote", submissionId: "p2", voterId: "host", approve: false });
     s = apply(s, { type: "vote", submissionId: "p2", voterId: "ana", approve: false });
     const r = ranking(s);
-    expect(r[0]).toMatchObject({ player: { id: "ana" }, score: 1 });
+    // An unrated quest is worth DEFAULT_POINTS.
+    expect(r[0]).toMatchObject({ player: { id: "ana" }, score: DEFAULT_POINTS, verified: 1 });
     expect(r.find((x) => x.player.id === "bo")!.score).toBe(0);
   });
 });
@@ -215,7 +216,7 @@ describe("leaving and names", () => {
     s = apply(s, { type: "leave", playerId: "bo" });
     expect(s.players.some((p) => p.id === "bo")).toBe(true);
     expect(s.away).toContain("bo");
-    expect(ranking(s).find((r) => r.player.id === "bo")?.score).toBe(1);
+    expect(ranking(s).find((r) => r.player.id === "bo")?.score).toBe(DEFAULT_POINTS);
   });
 
   it("gives a blank name a placeholder, and lets a rejoin fix it", () => {
@@ -224,5 +225,53 @@ describe("leaving and names", () => {
     expect(s.players.find((p) => p.id === "x")?.name).toBe("Player 2");
     s = apply(s, { type: "join", player: { id: "x", name: "Ana" } });
     expect(s.players.find((p) => p.id === "x")?.name).toBe("Ana");
+  });
+});
+
+describe("difficulty and points", () => {
+  const rating = (time: number, nerve: number, effort: number, points = 0): QuestDifficulty => ({ time, nerve, effort, points, by: "ai" });
+
+  it("maps the three factors onto 1–5 points", () => {
+    expect(pointsFor({ time: 1, nerve: 1, effort: 1 })).toBe(1);
+    expect(pointsFor({ time: 5, nerve: 5, effort: 5 })).toBe(5);
+    expect(pointsFor({ time: 2, nerve: 5, effort: 2 })).toBe(3);
+    // Out-of-range ratings from a model are clamped, not trusted.
+    expect(pointsFor({ time: 99, nerve: -4, effort: 3 })).toBe(3);
+  });
+
+  it("scores verified proofs by their quest's points", () => {
+    let s = lobby([quest("a1", "ana"), quest("b1", "bo")]);
+    s = apply(s, { type: "rateQuests", ratings: [{ questId: "a1", difficulty: rating(5, 5, 5, 1) }, { questId: "b1", difficulty: rating(1, 1, 1, 5) }] });
+    // Points come from the factors, whatever the rater claimed.
+    expect(s.quests.find((q) => q.id === "a1")?.difficulty?.points).toBe(5);
+    expect(s.quests.find((q) => q.id === "b1")?.difficulty?.points).toBe(1);
+    s = apply(s, { type: "startGame" }, 0, () => 0);
+    const hostQuest = s.assignments.host;
+    s = apply(s, { type: "submit", submission: proof(hostQuest, "host", "p1") });
+    expect(claimedPoints(s, "host")).toBe(hostQuest === "a1" ? 5 : 1);
+    expect(ranking(s)[0]).toMatchObject({ player: { id: "host" }, score: hostQuest === "a1" ? 5 : 1 });
+  });
+
+  it("lets the host set points in review, and the rater never overrides them", () => {
+    let s = lobby([quest("a1", "ana")]);
+    s = apply(s, { type: "setPhase", phase: "review" });
+    s = apply(s, { type: "setQuestPoints", questId: "a1", points: 9 });
+    expect(s.quests[0].difficulty).toMatchObject({ points: 5, by: "host" });
+    s = apply(s, { type: "rateQuests", ratings: [{ questId: "a1", difficulty: rating(1, 1, 1) }] });
+    expect(s.quests[0].difficulty?.points).toBe(5);
+    expect(authorize(s, { type: "setQuestPoints", questId: "a1", points: 3 }, "ana")).toBe(false);
+    expect(authorize(s, { type: "rateQuests", ratings: [] }, "host")).toBe(false);
+    // Settled once the game starts.
+    s = apply(s, { type: "startGame" });
+    expect(apply(s, { type: "setQuestPoints", questId: "a1", points: 1 })).toBe(s);
+  });
+
+  it("counts every quest as 1 point when difficulty scoring is off", () => {
+    let s = lobby([quest("a1", "ana"), quest("b1", "bo")]);
+    s = apply(s, { type: "rateQuests", ratings: [{ questId: "a1", difficulty: rating(5, 5, 5) }, { questId: "b1", difficulty: rating(5, 5, 5) }] });
+    s = apply(s, { type: "updateSettings", settings: { ...s.settings, difficultyScoring: false } });
+    s = apply(s, { type: "startGame" });
+    s = apply(s, { type: "submit", submission: proof(s.assignments.host, "host", "p1") });
+    expect(ranking(s)[0].score).toBe(1);
   });
 });

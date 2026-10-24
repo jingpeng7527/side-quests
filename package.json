@@ -7,7 +7,7 @@
     "app"
   ],
   "scripts": {
-    "test": "npm run test -w @side-quests/game",
+    "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "server": "npm run dev -w server",
     "app": "npm run start -w app",
@@ -15,7 +15,8 @@
     "party": "node scripts/party.mjs",
     "party:local": "node scripts/party.mjs --local",
     "deploy": "npm run web:build && npm run deploy -w server",
-    "qr": "node scripts/show-qr.mjs"
+    "qr": "node scripts/show-qr.mjs",
+    "test:mobile": "node scripts/test-mobile.mjs"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,
@@ -26,5 +27,8 @@
   "devDependencies": {
     "qrcode": "^1.5.4",
     "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
