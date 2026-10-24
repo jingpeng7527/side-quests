@@ -4,6 +4,8 @@ A party game for friend groups: everyone writes side quests, the deck gets dealt
 
 Runs on **iOS, Android and the web** from one codebase.
 
+**Want it on your phone?** See [docs/run-on-a-phone.md](docs/run-on-a-phone.md): Expo Go in five minutes, or an installed build for iPhone or Android.
+
 ## Layout
 
 ```
@@ -69,21 +71,13 @@ npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler deploy
 ```
 
-**App** (EAS): put the deployed server URL in `app/eas.json`, then
-
-```sh
-cd app
-npx eas-cli@latest init
-npx eas-cli@latest build --platform all --profile preview   # installable test builds
-npx eas-cli@latest submit                                   # store submission
-npx eas-cli@latest update                                   # ship JS/design changes without review
-```
+**App:** see [docs/run-on-a-phone.md](docs/run-on-a-phone.md) for installable Android and iPhone builds (EAS), TestFlight, and store release.
 
 **Web:** `cd app && npx expo export --platform web`, then host `dist/` anywhere static (e.g. Cloudflare Pages).
 
 ## Notes and limits
 
-- **Maps:** react-native-maps (Apple Maps on iOS, Google Maps on Android). Store builds for Android need a Google Maps API key in `app.json`. On web, maps are view-only OpenStreetMap embeds and the place picker offers "use my spot" instead of search and tap-to-pin.
+- **Maps:** react-native-maps (Apple Maps on iOS, Google Maps on Android). Android builds (not Expo Go) need a Google Maps API key via `GOOGLE_MAPS_ANDROID_API_KEY` — see the phone guide. On web, maps are view-only OpenStreetMap embeds and the place picker offers "use my spot" instead of search and tap-to-pin.
 - **Walking routes** come from the free FOSSGIS OSRM router (OpenStreetMap data, fair-use). Swap in a keyed provider or self-hosted OSRM before launch.
 - **Place search** uses the phone's geocoder (`expo-location`), which finds addresses and well-known landmarks rather than any business by name.
 - **Photos** are downscaled on the phone and stored in R2; the game state only carries their paths.

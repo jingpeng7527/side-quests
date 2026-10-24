@@ -1,15 +1,26 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
-    "development": { "developmentClient": true, "distribution": "internal" },
     "preview": {
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_SERVER_URL": "https://side-quests.<your-subdomain>.workers.dev" }
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://side-quests.<your-subdomain>.workers.dev"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_SERVER_URL": "https://side-quests.<your-subdomain>.workers.dev" }
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://side-quests.<your-subdomain>.workers.dev"
+      }
     }
   },
-  "submit": { "production": {} }
+  "submit": {
+    "production": {}
+  }
 }
