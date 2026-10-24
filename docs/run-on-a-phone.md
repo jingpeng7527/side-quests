@@ -19,7 +19,7 @@ brew install cloudflared   # first time only (free, no account)
 npm run party
 ```
 
-It builds the web app, starts the game server, opens a free Cloudflare tunnel, and prints a QR code and an `https://….trycloudflare.com` link. Then:
+It builds the web app, starts the game server, opens a free Cloudflare tunnel, and opens a big QR code for its `https://….trycloudflare.com` link in your browser. Put it on screen for everyone. Then:
 
 1. Everyone scans the QR code with their phone's camera and taps the link.
 2. One person (the host) taps **Create lobby**.
@@ -28,6 +28,8 @@ It builds the web app, starts the game server, opens a free Cloudflare tunnel, a
 Anyone with the link can reach your game while it runs; **Ctrl+C** ends the party. Each run gets a new link.
 
 **If the tunnel won't start**, the script prints cloudflared's own error. Some office and campus networks block Cloudflare tunnels altogether; the script already uses the HTTPS mode that gets through most of them. If the link shows "can't be reached" on a phone at first, wait half a minute: brand-new links take a moment to appear.
+
+**A QR code for any link,** such as your deployed `workers.dev` address: `npm run qr -- https://side-quests.<you>.workers.dev`. (QR codes drawn in a terminal often break up into stripes, which is why these open in the browser.)
 
 **Everyone on the same Wi-Fi?** `npm run party:local` skips the tunnel and prints a link like `http://192.168.1.20:8787`. Quests with places can't show your position there: browsers only share location over https. Use `npm run party` for those.
 

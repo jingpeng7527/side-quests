@@ -4,7 +4,7 @@ A party game for friend groups: everyone writes side quests, the deck gets dealt
 
 Runs on **iOS, Android and the web** from one codebase.
 
-**Play now:** `npm install && npm run party` prints a QR code. Everyone scans it with their phone camera and plays in the browser, with no app or account. More options (Expo Go for development, installed builds) are in [docs/run-on-a-phone.md](docs/run-on-a-phone.md).
+**Play now:** `npm install && npm run party` opens a QR code in your browser. Everyone scans it with their phone camera and plays in the browser, with no app or account. More options (Expo Go for development, installed builds) are in [docs/run-on-a-phone.md](docs/run-on-a-phone.md).
 
 ## Layout
 

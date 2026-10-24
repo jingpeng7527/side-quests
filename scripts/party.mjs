@@ -6,14 +6,14 @@
 //   npm run party:local    link on this Wi-Fi only (no tunnel)
 //
 // It builds the web app, starts the game server (which serves that web app and
-// the game from one address), opens the tunnel, and prints the QR code.
+// the game from one address), opens the tunnel, and opens a QR code page.
 // Options: --local, --skip-build
 
 import { spawn, spawnSync } from "node:child_process";
 import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import QRCode from "qrcode";
+import { showQr } from "./show-qr.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
@@ -176,10 +176,12 @@ if (local) {
   else say("\x1b[33mCouldn't open the link from this computer yet (new links take a moment to appear). Try it on a phone; if it doesn't load within a minute, use `npm run party:local`.\x1b[0m");
 }
 
-// 4. The QR code.
-const qr = await QRCode.toString(publicUrl, { type: "terminal", small: true, errorCorrectionLevel: "M" });
-console.log(`\n${qr}`);
+// 4. The QR code — in the browser, big and crisp (terminal QR codes break up when
+// the terminal adds space between lines).
+await showQr(publicUrl);
+console.log("");
 say(`\x1b[1mScan to play:\x1b[0m ${publicUrl}`);
+say("The QR code just opened in your browser — put it on screen for everyone.");
 say("Everyone opens it in their phone browser (camera app → tap the link). No app, no account.");
 say("One person taps Create lobby; the lobby screen has its own QR code and an Invite link for everyone else.");
 if (local) say("Same Wi-Fi only. Location-based quests need the public link (`npm run party`) — browsers only share location over https.");

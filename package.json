@@ -14,7 +14,8 @@
     "web:build": "cd app && npx expo export --platform web",
     "party": "node scripts/party.mjs",
     "party:local": "node scripts/party.mjs --local",
-    "deploy": "npm run web:build && npm run deploy -w server"
+    "deploy": "npm run web:build && npm run deploy -w server",
+    "qr": "node scripts/show-qr.mjs"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,
