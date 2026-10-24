@@ -1,0 +1,24 @@
+{
+  "name": "side-quests",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "server",
+    "app"
+  ],
+  "scripts": {
+    "test": "npm run test -w @side-quests/game",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "server": "npm run dev -w server",
+    "app": "npm run start -w app"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261019.1": true,
+    "fsevents@2.3.3": true,
+    "unrs-resolver@1.12.2": true
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

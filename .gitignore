@@ -1,0 +1,14 @@
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+node_modules/
+.expo/
+dist/
+web-build/
+.wrangler/
+.dev.vars
+app/ios/
+app/android/
+*.tsbuildinfo

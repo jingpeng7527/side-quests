@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Side Quests",
+    "slug": "side-quests",
+    "scheme": "sidequests",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F2EC",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sidequests.app"
+    },
+    "android": {
+      "package": "com.sidequests.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#D9241C",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Snap proof that you completed your side quest, and scan a lobby's QR code to join."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Snap proof that you completed your side quest.",
+          "photosPermission": "Pick a photo as proof that you completed your side quest."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Shows your route to a quest's spot and pins each proof photo on your map."
+        }
+      ]
+    ]
+  }
+}
