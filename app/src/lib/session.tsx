@@ -53,7 +53,7 @@ interface Session {
   myQuest: Quest | undefined;
   mySkipsLeft: number;
   /** `takenAt` (device ms) is when the photo was snapped, so a slow upload still beats the buzzer. */
-  submitProof: (proof: Proof, takenAt?: number) => void;
+  submitProof: (proof: Proof, takenAt?: number) => Promise<void>;
   uploadPhoto: (uri: string) => Promise<Proof>;
 }
 
@@ -259,6 +259,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!granted || cancelled) return;
       sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, distanceInterval: 10 }, (pos) => {
         const c = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        // Socket handlers and proof submission read this ref before React's
+        // state effect has a chance to run.
+        locationRef.current = c;
         setLocation(c);
         raw({ type: "location", location: c });
       });
@@ -273,9 +276,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const mySkipsLeft = state?.settings.allowSkips ? Math.max(0, state.settings.maxSkips - (state.skipsUsed[me.id] ?? 0)) : 0;
 
   const submitProof = useCallback(
-    (proof: Proof, takenAt = Date.now()) => {
+    async (proof: Proof, takenAt = Date.now()) => {
       if (!myQuest) return;
-      const here = locationRef.current ?? undefined;
+      let here = locationRef.current ?? undefined;
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        // Web location watches may pause while Safari opens the camera or
+        // photo library. Refresh on submission and retain the watcher fix if
+        // a current reading is slow or unavailable.
+        const position = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((resolve) => {
+            timeout = setTimeout(() => resolve(null), 5_000);
+          }),
+        ]);
+        if (timeout) clearTimeout(timeout);
+        if (position) {
+          here = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+          locationRef.current = here;
+          setLocation(here);
+        }
+      } catch {
+        if (timeout) clearTimeout(timeout);
+      }
       send({
         type: "submit",
         submission: {

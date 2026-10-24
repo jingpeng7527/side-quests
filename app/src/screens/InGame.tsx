@@ -358,8 +358,8 @@ function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onC
                   title="Use stand-in shot (dev)"
                   kind="quiet"
                   size="md"
-                  onPress={() => {
-                    submitProof({ kind: "standin", seed: standinSeed });
+                  onPress={async () => {
+                    await submitProof({ kind: "standin", seed: standinSeed });
                     setStandinSeed(newSeed());
                     close();
                     onSubmitted();
