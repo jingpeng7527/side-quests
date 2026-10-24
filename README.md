@@ -4,7 +4,60 @@ A party game for friend groups: everyone writes side quests, the deck gets dealt
 
 Runs on **iOS, Android and the web** from one codebase.
 
-**Play now:** `npm install && npm run party` opens a QR code in your browser. Everyone scans it with their phone camera and plays in the browser, with no app or account. More options (Expo Go for development, installed builds) are in [docs/run-on-a-phone.md](docs/run-on-a-phone.md).
+## Getting started (any machine)
+
+**You need:** [Node.js 24](https://nodejs.org/) or newer (it includes npm), and Git. Works on macOS, Windows and Linux.
+
+```sh
+git clone https://github.com/r-magnus/side-quests.git
+cd side-quests
+npm install
+```
+
+Optional, for AI-written quests and AI difficulty ratings: copy `server/.env.example` to `server/.env` and put an OpenAI API key in it. Without a key the game still works; an offline quest deck and a built-in difficulty estimate fill in.
+
+### Play a game: `npm run party`
+
+```sh
+npm run party
+```
+
+This is the one command for playing on real phones. It:
+
+1. builds the web version of the app,
+2. starts the game server on port 8787 (or reuses one that's already running),
+3. opens a free, temporary public link with a [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) (no Cloudflare account needed),
+4. opens a big QR code for that link in your browser.
+
+Then everyone scans the QR code with their phone camera and plays in the phone's browser, with no app or account. One person taps **Host a lobby**; everyone else scans the lobby's own QR code or taps the **Invite friends** link. **Ctrl+C** ends the party. Each run gets a new link, and anyone with the link can reach your game while it runs.
+
+The tunnel needs `cloudflared` installed once:
+
+| OS | Install |
+|---|---|
+| macOS | `brew install cloudflared` |
+| Windows | `winget install --id Cloudflare.cloudflared` |
+| Linux | a package from [Cloudflare's downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) |
+
+**Everyone on the same Wi-Fi?** `npm run party:local` skips the tunnel and prints a link like `http://192.168.1.20:8787`. No `cloudflared` needed. Two limits: guest and office networks often block devices from reaching each other, and browsers only share location over https, so quests with places can't show your position. Use `npm run party` for those.
+
+**Other handy commands:**
+
+- `npm run qr -- <url>`: show a big QR code for any link, such as a deployed `workers.dev` address.
+- `npm run deploy`: publish to Cloudflare for a permanent link that works without your computer (see [Deploy](#deploy)).
+
+**If something goes wrong:**
+
+| Problem | Fix |
+|---|---|
+| "cloudflared isn't installed" | Install it (table above), or use `npm run party:local`. |
+| The tunnel won't start | The script prints cloudflared's own error. Some networks block tunnels entirely; use `party:local` or another network. |
+| The phone shows "can't be reached" at first | Brand-new links take up to half a minute to appear. Wait and reload. |
+| macOS asks whether `node` or `workerd` may accept connections | Click **Allow**. That's how phones on your Wi-Fi reach the game. |
+| Port 8787 is busy | Another game server is already running. `party` reuses it, or stop it first. |
+| Changes don't show up | `party` rebuilds the web app each run. Restart it after editing code, and reload the page on phones. |
+
+More ways to run on phones (Expo Go for development, installed iOS and Android builds) are in [docs/run-on-a-phone.md](docs/run-on-a-phone.md).
 
 ## Layout
 
@@ -22,11 +75,11 @@ The server is the referee: every phone sends actions, the lobby's Durable Object
 
 **Scoring:** harder quests are worth more. Each quest is rated as it's written, from 1 to 5 on time (how long it takes), nerve (how awkward or embarrassing it is) and effort (travel, props, physical work); the average becomes 1–5 points. Ratings come from OpenAI when the server has a key (`server/src/ratings.ts`), otherwise from an offline keyword estimate. Authors see their quest's rating while writing; in review the host sees every rating with its reason and can overrule it with − / +, and the rater never overwrites the host's call. A verified proof earns its quest's points. Turn off **Harder = more points** in game settings to make every quest worth 1.
 
-## Run it locally
+## Develop locally
+
+For working on the code with live reload in a simulator, emulator or Expo Go (`npm run party` is for playing; it serves a fixed build):
 
 ```sh
-npm install
-
 # 1. Lobby server on :8787 (no Cloudflare account needed for local dev)
 npm run server
 
@@ -45,7 +98,7 @@ The app finds the server on the same machine that serves the JS bundle, so simul
 ## Testing
 
 ```sh
-npm test            # game rules + geocoding (Node 24)
+npm test            # game rules, difficulty ratings and geocoding (Node 24)
 npm run typecheck   # all workspaces
 cd app && npx expo lint
 ```
