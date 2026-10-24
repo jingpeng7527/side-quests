@@ -50,7 +50,7 @@ export function EndGameScreen() {
           ) : (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: space.s }}>
               <Feather name="map" size={28} color={color.stone} />
-              <Label>No pins dropped</Label>
+              <Label>{mine.length ? "No locations recorded" : "No pins dropped"}</Label>
             </View>
           )}
         </View>
