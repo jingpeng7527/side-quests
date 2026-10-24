@@ -1,16 +1,19 @@
 import { DURATION_OPTIONS, type GameSettings, type Player } from "@side-quests/game";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, Switch, View, useWindowDimensions } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, Share, Switch, View, useWindowDimensions } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import { joinUrl } from "../lib/config";
 import { useGame } from "../lib/session";
 import { DevMenu } from "../ui/DevMenu";
+import { HostAdvance, HostWaitingBar, TextAction, useToast } from "../ui/flow";
 import { halftones } from "../ui/Halftone";
-import { Avatar, Body, Display, Hairline, Label, Screen, SlabButton, Tag, WaitingBar, color, space, usePalette } from "../ui/kit";
+import { Avatar, Body, Display, Hairline, Label, Screen, SlabButton, Tag, color, space, usePalette } from "../ui/kit";
 
 export function LobbyScreen() {
-  const { state, isHost, me, send, dev, leave } = useGame();
+  const { state, isHost, me, dev, leave } = useGame();
   const [editing, setEditing] = useState(false);
   const { width } = useWindowDimensions();
+  const toast = useToast();
 
   return (
     <Screen
@@ -21,17 +24,12 @@ export function LobbyScreen() {
       accessory={<DevMenu />}
       footer={
         <>
-          {isHost ? (
-            <>
-              <SlabButton title="+ Add a bot (testing)" kind="quiet" onPress={() => dev({ op: "addBot" })} />
-              <SlabButton title="Write quests" onPress={() => send({ type: "setPhase", phase: "writing" })} />
-            </>
-          ) : (
-            <WaitingBar text="Waiting for host" />
-          )}
-          <Pressable onPress={leave} style={{ alignItems: "center", paddingTop: space.xs }}>
-            <Label>Leave</Label>
-          </Pressable>
+          {isHost ? <HostAdvance title="Start writing quests" /> : <HostWaitingBar text="Waiting for the host" />}
+          <View style={{ flexDirection: "row", justifyContent: "center", gap: space.l }}>
+            <TextAction title="Invite friends" onPress={() => void invite(state.code, toast.show)} />
+            {isHost && state.devTools && <TextAction title="+ Add a bot" onPress={() => dev({ op: "addBot" })} />}
+            <TextAction title="Leave lobby" onPress={leave} />
+          </View>
         </>
       }
     >
@@ -45,18 +43,20 @@ export function LobbyScreen() {
           </View>
           {/* Phones join by scanning this. */}
           <View style={{ padding: 8, backgroundColor: color.paperBright }}>
-            <QRCode value={`sidequests://join/${state.code}`} size={96} color={color.inkBlack} backgroundColor={color.paperBright} />
+            <QRCode value={joinUrl(state.code)} size={104} color={color.inkBlack} backgroundColor={color.paperBright} />
           </View>
         </View>
         <Body size={15} color={color.stone} style={{ maxWidth: 320 }}>
-          {isHost ? "Friends scan the code with Join a lobby — or type the four letters." : "You're in. Waiting for the host to kick things off."}
+          {isHost
+            ? "Friends scan the code with their phone camera — it opens right in the browser, no app or account needed."
+            : "You're in. Waiting for the host to kick things off."}
         </Body>
 
         <View>
           <Hairline />
           {state.players.map((p) => (
             <View key={p.id}>
-              <PlayerRow player={p} isHost={p.id === state.hostId} isMe={p.id === me.id} />
+              <PlayerRow player={p} isHost={p.id === state.hostId} isMe={p.id === me.id} away={state.away?.includes(p.id)} />
               <Hairline />
             </View>
           ))}
@@ -65,19 +65,41 @@ export function LobbyScreen() {
         <SettingsSummary settings={state.settings} editable={isHost} onEdit={() => setEditing(true)} />
       </ScrollView>
       <GameSettingsSheet visible={editing} onClose={() => setEditing(false)} />
+      {toast.node}
     </Screen>
   );
 }
 
-export function PlayerRow({ player, isHost, isMe, trailing }: { player: Player; isHost?: boolean; isMe?: boolean; trailing?: string }) {
+/** Share the join link: the system share sheet where there is one, otherwise copy it. */
+async function invite(code: string, notify: (m: string) => void) {
+  const url = joinUrl(code);
+  const message = `Join my Side Quests lobby ${code}: ${url}`;
+  try {
+    if (Platform.OS !== "web") {
+      await Share.share({ message });
+      return;
+    }
+    if (navigator.share) {
+      await navigator.share({ title: "Side Quests", text: `Join my Side Quests lobby ${code}`, url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    notify("Invite link copied");
+  } catch {
+    notify(url);
+  }
+}
+
+export function PlayerRow({ player, isHost, isMe, away, trailing }: { player: Player; isHost?: boolean; isMe?: boolean; away?: boolean; trailing?: string }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingVertical: 10 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingVertical: 10, opacity: away ? 0.45 : 1 }}>
       <Avatar name={player.name} highlighted={isMe} />
       <Display size={32} style={{ textTransform: "none" }}>
         {player.name}
       </Display>
       {isHost && <Tag text="Host" />}
       {player.isBot && <Tag text="Bot" />}
+      {away && <Tag text="Away" />}
       <View style={{ flex: 1 }} />
       {trailing && <Label>{trailing}</Label>}
     </View>

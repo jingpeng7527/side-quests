@@ -1,5 +1,6 @@
 import { mulberry32, type Proof } from "@side-quests/game";
-import { Image, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Image, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { serverUrl } from "../lib/config";
 import { Halftone, type HalftoneSpec } from "./Halftone";
 import { color, font } from "./theme";
@@ -12,11 +13,23 @@ const INKS: [string, string, string][] = [
 ];
 
 /** A proof photo — real, or a halftone stand-in generated from its seed. */
-export function ProofImage({ proof, quest, by, style, large = false }: { proof: Proof; quest: string; by: string; style?: ViewStyle; large?: boolean }) {
-  if (proof.kind === "photo") {
-    const uri = proof.url.startsWith("/") ? `${serverUrl()}${proof.url}` : proof.url;
-    return <Image source={{ uri }} style={[{ backgroundColor: color.paperRaised }, style as object]} resizeMode="cover" />;
-  }
+export function ProofImage({
+  proof,
+  quest,
+  by,
+  style,
+  large = false,
+  fit = "cover",
+}: {
+  proof: Proof;
+  quest: string;
+  by: string;
+  style?: ViewStyle;
+  large?: boolean;
+  /** "contain" shows the whole photo (zoom view); "cover" fills the frame. */
+  fit?: "cover" | "contain";
+}) {
+  if (proof.kind === "photo") return <Photo url={proof.url} style={style} fit={fit} />;
   const rand = mulberry32(proof.seed);
   const [bg, ink, type] = INKS[Math.floor(rand() * INKS.length)];
   const spec: HalftoneSpec = {
@@ -35,7 +48,7 @@ export function ProofImage({ proof, quest, by, style, large = false }: { proof: 
       <Text numberOfLines={4} style={[styles.quest, { color: type, fontSize: 40 * s + 6, lineHeight: (40 * s + 6) * 0.95, padding: 18 * s + 4 }]}>
         {quest.toUpperCase()}
       </Text>
-      <Text style={[styles.by, { color: type, fontSize: 14 * s + 3, left: 18 * s + 4, bottom: 14 * s + 3 }]}>PROOF · {by.toUpperCase()}</Text>
+      {large && <Text style={[styles.by, { color: type, fontSize: 14 * s + 3, left: 18 * s + 4, bottom: 14 * s + 3 }]}>PROOF · {by.toUpperCase()}</Text>}
     </View>
   );
 }
@@ -44,3 +57,30 @@ const styles = StyleSheet.create({
   quest: { fontFamily: font.display },
   by: { position: "absolute", fontFamily: font.mono, letterSpacing: 1 },
 });
+
+/** A real photo, with a quiet loading state and a clear "missing" state instead of a blank box. */
+function Photo({ url, style, fit }: { url: string; style?: ViewStyle; fit: "cover" | "contain" }) {
+  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+  const uri = url.startsWith("/") ? `${serverUrl()}${url}` : url;
+  return (
+    <View style={[{ backgroundColor: fit === "contain" ? "transparent" : color.paperRaised, overflow: "hidden" }, style]}>
+      <Image
+        source={{ uri }}
+        style={StyleSheet.absoluteFill}
+        resizeMode={fit}
+        onLoad={() => setStatus("ok")}
+        onError={() => setStatus("error")}
+        accessibilityIgnoresInvertColors
+      />
+      {status !== "ok" && (
+        <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", gap: 8 }]}>
+          {status === "loading" ? (
+            <ActivityIndicator color={color.signalRed} />
+          ) : (
+            <Text style={{ fontFamily: font.mono, fontSize: 11, letterSpacing: 1.4, color: color.stone }}>PHOTO MISSING</Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}

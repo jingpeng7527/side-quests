@@ -1,11 +1,12 @@
 import { distance, formatDistance, newSeed, type Coordinate, type QuestPlace, type WalkingRoute } from "@side-quests/game";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useState } from "react";
-import { Animated, Linking, Modal, Platform, Pressable, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import { serverUrl } from "../lib/config";
 import { useGame } from "../lib/session";
 import { DevMenu } from "../ui/DevMenu";
+import { easeIn, useToast } from "../ui/flow";
 import { halftones } from "../ui/Halftone";
 import { Body, Display, Label, PaletteProvider, Screen, SlabButton, Tag, color, space } from "../ui/kit";
 import { QuestMap } from "../ui/maps";
@@ -15,8 +16,21 @@ export function InGameScreen() {
   const { state, me, myQuest, mySkipsLeft, send, location } = useGame();
   const [capturing, setCapturing] = useState(false);
   const [stamp] = useState(() => new Animated.Value(0));
+  const toast = useToast();
   const done = state.submissions.filter((s) => s.playerId === me.id).length;
   const place = myQuest?.place;
+
+  // A friend finishing a quest is news: a toast and a light tap.
+  const seen = useRef(state.submissions.length);
+  useEffect(() => {
+    const fresh = state.submissions.slice(seen.current).filter((s) => s.playerId !== me.id);
+    seen.current = state.submissions.length;
+    const last = fresh[fresh.length - 1];
+    if (!last) return;
+    const name = state.players.find((p) => p.id === last.playerId)?.name ?? "Someone";
+    toast.show(fresh.length > 1 ? `${fresh.length} quests just got done` : `${name} completed a quest`);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, [state.submissions.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const celebrate = () => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -24,7 +38,7 @@ export function InGameScreen() {
     Animated.sequence([
       Animated.spring(stamp, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 10 }),
       Animated.delay(900),
-      Animated.timing(stamp, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.timing(stamp, { toValue: 0, duration: 220, easing: easeIn, useNativeDriver: true }),
     ]).start();
   };
 
@@ -37,15 +51,18 @@ export function InGameScreen() {
       art={halftones.inGame}
       accessory={<DevMenu />}
       footer={
-        <View style={{ flexDirection: "row", gap: space.s }}>
-          <SlabButton
-            title={`Skip · ${mySkipsLeft}`}
-            kind="outline"
-            style={{ width: 128 }}
-            disabled={!mySkipsLeft || !myQuest}
-            onPress={() => send({ type: "skip", playerId: me.id })}
-          />
-          <SlabButton title="◉ Snap proof" style={{ flex: 1 }} disabled={!myQuest} onPress={() => setCapturing(true)} />
+        <View style={{ gap: space.s }}>
+          <Standings />
+          <View style={{ flexDirection: "row", gap: space.s }}>
+            <SlabButton
+              title={`Skip · ${mySkipsLeft}`}
+              kind="outline"
+              style={{ width: 128 }}
+              disabled={!mySkipsLeft || !myQuest}
+              onPress={() => send({ type: "skip", playerId: me.id })}
+            />
+            <SlabButton title="◉ Snap proof" style={{ flex: 1 }} disabled={!myQuest} onPress={() => setCapturing(true)} />
+          </View>
         </View>
       }
     >
@@ -85,8 +102,29 @@ export function InGameScreen() {
           </View>
         </Animated.View>
       </View>
+      {toast.node}
       <CaptureSheet visible={capturing} onClose={() => setCapturing(false)} onSubmitted={celebrate} />
     </Screen>
+  );
+}
+
+/** Everyone's tally, live — so the race feels like a race. You first, then by score. */
+function Standings() {
+  const { state, me } = useGame();
+  const counts = state.players
+    .map((p) => ({ p, n: state.submissions.filter((s) => s.playerId === p.id).length }))
+    .sort((a, b) => Number(b.p.id === me.id) - Number(a.p.id === me.id) || b.n - a.n);
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.m }} accessibilityLabel="Standings">
+      {counts.map(({ p, n }) => (
+        <View key={p.id} style={{ flexDirection: "row", alignItems: "baseline", gap: 6, opacity: state.away?.includes(p.id) ? 0.5 : 1 }}>
+          <Label size={11} color={color.paperBright} style={{ opacity: p.id === me.id ? 1 : 0.85 }}>
+            {p.id === me.id ? "You" : p.name}
+          </Label>
+          <Display size={22}>{String(n)}</Display>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -101,6 +139,18 @@ function Countdown({ compact }: { compact: boolean }) {
   const remaining = Math.max(0, Math.floor(((state.endsAt ?? 0) - (now + clockOffset)) / 1000));
   const urgent = remaining < 60;
   const text = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
+
+  // A nudge you can feel at one minute and at ten seconds.
+  const warned = useRef(new Set<number>());
+  useEffect(() => {
+    for (const mark of [60, 10]) {
+      if (remaining <= mark && remaining > mark - 3 && !warned.current.has(mark)) {
+        warned.current.add(mark);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      }
+    }
+  }, [remaining]);
+
   return (
     <View accessible accessibilityLabel={`${Math.floor(remaining / 60)} minutes ${remaining % 60} seconds left`} style={{ gap: space.s }}>
       <Display size={compact ? 92 : 136} color={urgent ? color.inkBlack : color.paperBright} style={{ fontVariant: ["tabular-nums"] }}>
@@ -173,60 +223,101 @@ function QuestMapCard({ place, me }: { place: QuestPlace; me: Coordinate | null 
   );
 }
 
-/** Camera, library, or — on simulators and in dev — a generated stand-in. */
+type Picked = { uri: string; takenAt: number };
+
+/**
+ * Camera or library → a preview to check → upload. In dev (and on simulators,
+ * which have no camera) a generated stand-in is offered too.
+ */
 function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onClose: () => void; onSubmitted: () => void }) {
   const { state, me, myQuest, submitProof, uploadPhoto } = useGame();
-  const [busy, setBusy] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Picked | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [standinSeed, setStandinSeed] = useState(newSeed);
 
-  const finish = async (pick: () => Promise<ImagePicker.ImagePickerResult>) => {
+  const close = () => {
+    setPicked(null);
+    setError(null);
+    setUploading(false);
+    onClose();
+  };
+
+  const pick = async (from: "camera" | "library") => {
+    setError(null);
     try {
-      const result = await pick();
-      if (result.canceled || !result.assets?.[0]) return;
-      setBusy("Uploading…");
-      submitProof(await uploadPhoto(result.assets[0].uri));
-      onClose();
+      const result =
+        from === "camera"
+          ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
+          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+      if (!result.canceled && result.assets?.[0]) setPicked({ uri: result.assets[0].uri, takenAt: Date.now() });
+    } catch {
+      setError(from === "camera" ? "No camera here — choose from your library instead." : "Couldn't open your photos.");
+    }
+  };
+
+  const submit = async () => {
+    if (!picked) return;
+    setUploading(true);
+    setError(null);
+    try {
+      submitProof(await uploadPhoto(picked.uri), picked.takenAt);
+      close();
       onSubmitted();
     } catch (e) {
-      setBusy(`Couldn't use that photo: ${(e as Error).message}`);
-      return;
+      setUploading(false);
+      setError(`Upload didn't go through: ${(e as Error).message}. Try again?`);
     }
-    setBusy(null);
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <Screen
         index="◉"
-        title="Proof"
+        title={picked ? "Check your proof" : "Proof"}
         footer={
-          <>
-            <SlabButton title="Take photo" onPress={() => finish(() => ImagePicker.launchCameraAsync({ quality: 0.8 }))} />
-            <SlabButton title="Choose from library" kind="outline" onPress={() => finish(() => ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 }))} />
-            {state.devTools && (
-              <SlabButton
-                title="Use stand-in shot (dev)"
-                kind="outline"
-                onPress={() => {
-                  submitProof({ kind: "standin", seed: standinSeed });
-                  setStandinSeed(newSeed());
-                  onClose();
-                  onSubmitted();
-                }}
-              />
-            )}
-            <SlabButton title="Cancel" kind="quiet" onPress={onClose} />
-          </>
+          picked ? (
+            <>
+              <SlabButton title={uploading ? "Sending…" : "Submit proof"} disabled={uploading} onPress={submit} />
+              <SlabButton title="Retake" kind="outline" disabled={uploading} onPress={() => setPicked(null)} />
+            </>
+          ) : (
+            <>
+              <SlabButton title="Take photo" onPress={() => pick("camera")} />
+              <SlabButton title="Choose from library" kind="outline" onPress={() => pick("library")} />
+              {state.devTools && (
+                <SlabButton
+                  title="Use stand-in shot (dev)"
+                  kind="outline"
+                  onPress={() => {
+                    submitProof({ kind: "standin", seed: standinSeed });
+                    setStandinSeed(newSeed());
+                    close();
+                    onSubmitted();
+                  }}
+                />
+              )}
+              <SlabButton title="Cancel" kind="quiet" onPress={close} />
+            </>
+          )
         }
       >
         <View style={{ flex: 1, paddingHorizontal: space.gutter, gap: space.m }}>
-          <Display size={36}>{myQuest?.text ?? ""}</Display>
-          {busy && <Label color={color.signalRed}>{busy}</Label>}
-          {state.devTools && (
-            <View style={{ flex: 1, alignItems: "center" }}>
+          <Display size={34}>{myQuest?.text ?? ""}</Display>
+          {error && <Body size={15} color={color.signalRed}>{error}</Body>}
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            {picked ? (
+              <View style={{ height: "100%", maxWidth: "100%", aspectRatio: 3 / 4, overflow: "hidden", opacity: uploading ? 0.5 : 1 }}>
+                <Image source={{ uri: picked.uri }} style={{ flex: 1 }} resizeMode="cover" />
+              </View>
+            ) : state.devTools ? (
               <ProofImage proof={{ kind: "standin", seed: standinSeed }} quest={myQuest?.text ?? ""} by={me.name} large style={{ height: "100%", aspectRatio: 3 / 4 }} />
-            </View>
-          )}
+            ) : (
+              <Body color={color.stone} style={{ textAlign: "center" }}>
+                Snap the moment — your friends vote on whether it counts.
+              </Body>
+            )}
+          </View>
         </View>
       </Screen>
     </Modal>

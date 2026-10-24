@@ -10,7 +10,10 @@
     "test": "npm run test -w @side-quests/game",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "server": "npm run dev -w server",
-    "app": "npm run start -w app"
+    "app": "npm run start -w app",
+    "web:build": "cd app && npx expo export --platform web",
+    "party": "node scripts/party.mjs",
+    "party:local": "node scripts/party.mjs --local"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,
@@ -19,6 +22,7 @@
     "unrs-resolver@1.12.2": true
   },
   "devDependencies": {
+    "qrcode": "^1.5.4",
     "typescript": "~6.0.3"
   }
 }

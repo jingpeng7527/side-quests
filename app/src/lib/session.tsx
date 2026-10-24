@@ -15,9 +15,22 @@ import * as Crypto from "expo-crypto";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as Location from "expo-location";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { serverUrl, wsUrl } from "./config";
+import { Platform } from "react-native";
+import { describeServerError, fetchWithTimeout, serverSetupProblem, serverUrl, wsUrl } from "./config";
 
-export const newId = () => Crypto.randomUUID();
+/**
+ * A random v4 UUID. Browsers only offer crypto.randomUUID on secure pages (https
+ * or localhost), and friends on a same-Wi-Fi link are on plain http — so build
+ * one from getRandomValues, which works everywhere.
+ */
+export function newId(): string {
+  if (Platform.OS !== "web") return Crypto.randomUUID();
+  const b = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 interface Session {
   me: Player;
@@ -25,6 +38,8 @@ interface Session {
   state: GameState | null;
   isHost: boolean;
   connecting: boolean;
+  /** False while the link to the lobby is down (we're retrying). */
+  connected: boolean;
   error: string | null;
   /** Server clock minus device clock, ms — keeps everyone's countdown in sync. */
   clockOffset: number;
@@ -36,7 +51,8 @@ interface Session {
   dev: (op: DevOp) => void;
   myQuest: Quest | undefined;
   mySkipsLeft: number;
-  submitProof: (proof: Proof) => void;
+  /** `takenAt` (device ms) is when the photo was snapped, so a slow upload still beats the buzzer. */
+  submitProof: (proof: Proof, takenAt?: number) => void;
   uploadPhoto: (uri: string) => Promise<Proof>;
 }
 
@@ -59,6 +75,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Player>({ id: "", name: "" });
   const [state, setState] = useState<GameState | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [connected, setConnected] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clockOffset, setClockOffset] = useState(0);
   const [location, setLocation] = useState<Coordinate | null>(null);
@@ -104,6 +121,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const socket = new WebSocket(wsUrl(code));
       ws.current = socket;
       socket.onopen = () => {
+        setConnected(true);
         socket.send(JSON.stringify({ type: "hello", player: meRef.current, location: locationRef.current ?? undefined } satisfies ClientMessage));
         for (const m of queued.current.splice(0)) socket.send(JSON.stringify(m));
       };
@@ -120,6 +138,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       };
       socket.onclose = () => {
         if (ws.current !== socket) return;
+        setConnected(false);
         // Dropped (backgrounded, network blip): reconnect while we're still in this lobby.
         setTimeout(() => {
           if (lobbyCode.current === code && ws.current === socket) connectRef.current(code);
@@ -135,13 +154,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const createLobby = useCallback(async () => {
     setError(null);
+    const problem = serverSetupProblem();
+    if (problem) return setError(problem);
+    setConnecting(true);
+    let res: Response | undefined;
     try {
-      const res = await fetch(`${serverUrl()}/api/lobbies`, { method: "POST", body: JSON.stringify({ host: meRef.current }) });
-      if (!res.ok) throw new Error(await res.text());
+      res = await fetchWithTimeout(`${serverUrl()}/api/lobbies`, { method: "POST", body: JSON.stringify({ host: meRef.current }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { code } = (await res.json()) as { code: string };
       connect(code);
-    } catch {
-      setError(`Can't reach the game server (${serverUrl()}).`);
+    } catch (e) {
+      setError(describeServerError(e, res && !res.ok ? res : undefined));
       setConnecting(false);
     }
   }, [connect]);
@@ -150,13 +173,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (input: string) => {
       const code = input.trim().toUpperCase();
       setError(null);
+      const problem = serverSetupProblem();
+      if (problem) return setError(problem);
+      let res: Response | undefined;
       try {
-        const res = await fetch(`${serverUrl()}/api/lobbies/${code}`);
-        if (res.status === 404) return setError(`No lobby called ${code}.`);
-        if (!res.ok) throw new Error(await res.text());
+        res = await fetchWithTimeout(`${serverUrl()}/api/lobbies/${code}`);
+        if (res.status === 404) return setError(`No lobby called ${code} — check the letters with the host.`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         connect(code);
-      } catch {
-        setError(`Can't reach the game server (${serverUrl()}).`);
+      } catch (e) {
+        setError(describeServerError(e, res && !res.ok ? res : undefined));
       }
     },
     [connect],
@@ -167,6 +193,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       ws.current.send(JSON.stringify({ type: "action", action: { type: "leave", playerId: meRef.current.id } } satisfies ClientMessage));
     }
     lobbyCode.current = null;
+    // Anything still queued belongs to the lobby we're leaving.
+    queued.current = [];
+    setConnected(true);
     const socket = ws.current;
     ws.current = null;
     socket?.close();
@@ -200,7 +229,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const mySkipsLeft = state?.settings.allowSkips ? Math.max(0, state.settings.maxSkips - (state.skipsUsed[me.id] ?? 0)) : 0;
 
   const submitProof = useCallback(
-    (proof: Proof) => {
+    (proof: Proof, takenAt = Date.now()) => {
       if (!myQuest) return;
       const here = locationRef.current ?? undefined;
       send({
@@ -210,7 +239,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           questId: myQuest.id,
           playerId: meRef.current.id,
           proof,
-          takenAt: Date.now() + clockOffset,
+          takenAt: takenAt + clockOffset,
           location: here,
           distanceFromPlace: myQuest.place && here ? distance(here, myQuest.place.coordinate) : undefined,
           votes: {},
@@ -227,6 +256,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       state,
       isHost: !!state && state.hostId === me.id,
       connecting,
+      connected,
       error,
       clockOffset,
       location,
@@ -240,21 +270,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       submitProof,
       uploadPhoto,
     }),
-    [me, setName, state, connecting, error, clockOffset, location, createLobby, joinLobby, leave, send, dev, myQuest, mySkipsLeft, submitProof],
+    [me, setName, state, connecting, connected, error, clockOffset, location, createLobby, joinLobby, leave, send, dev, myQuest, mySkipsLeft, submitProof],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
-/** Downscales a photo and uploads it, returning the proof to submit. */
+/**
+ * Downscales a photo and uploads it, returning the proof to submit. The JPEG goes
+ * up as base64 JSON: React Native can't reliably fetch() a local file into a body
+ * (it silently sent "File not found" instead of the image), and base64 behaves the
+ * same on iOS, Android and web.
+ */
 async function uploadPhoto(uri: string): Promise<Proof> {
   const ctx = ImageManipulator.manipulate(uri);
   ctx.resize({ width: 1080 });
   const image = await ctx.renderAsync();
-  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
-  const blob = await (await fetch(saved.uri)).blob();
-  const res = await fetch(`${serverUrl()}/api/photos`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
-  if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.7, base64: true });
+  if (!saved.base64) throw new Error("couldn't read the photo");
+  const res = await fetchWithTimeout(`${serverUrl()}/api/photos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data: saved.base64.replace(/^data:image\/\w+;base64,/, "") }),
+  }, 30_000);
+  if (!res.ok) throw new Error(res.status === 413 ? "that photo is too large" : `upload failed (${res.status})`);
   const { url } = (await res.json()) as { url: string };
   return { kind: "photo", url };
 }

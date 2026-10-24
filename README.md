@@ -4,7 +4,7 @@ A party game for friend groups: everyone writes side quests, the deck gets dealt
 
 Runs on **iOS, Android and the web** from one codebase.
 
-**Want it on your phone?** See [docs/run-on-a-phone.md](docs/run-on-a-phone.md): Expo Go in five minutes, or an installed build for iPhone or Android.
+**Play now:** `npm install && npm run party` prints a QR code. Everyone scans it with their phone camera and plays in the browser, with no app or account. More options (Expo Go for development, installed builds) are in [docs/run-on-a-phone.md](docs/run-on-a-phone.md).
 
 ## Layout
 
@@ -18,6 +18,8 @@ legacy-swiftui/  The original SwiftUI prototype, kept as a reference
 
 The server is the referee: every phone sends actions, the lobby's Durable Object runs them through the shared rules in `packages/game` (checking who's allowed to do what), and broadcasts the new state to everyone. Phones never talk to each other directly, so iPhones, Android phones and browsers can share a lobby.
 
+**Moving the game along:** only the host moves between phases, and never abruptly. A host request shows everyone a 3-second "moving to…" banner, which the host can cancel, before the server lands it. While writing and judging, players tap **I'm done**; the host sees how many are done and is asked to confirm before moving on early. Players whose phones drop off are marked away and don't hold anyone up. A half-written quest is saved if the phase changes, and a photo snapped before the buzzer still counts if its upload finishes just after.
+
 ## Run it locally
 
 ```sh
@@ -27,8 +29,10 @@ npm install
 npm run server
 
 # 2. App — then press i (iOS simulator), a (Android emulator) or w (web)
-npm run app
+npm run app        # or: cd app && npx expo start
 ```
+
+Run Expo from `app/` (that's what `npm run app` does). Running `npx expo start` from the repo root starts Metro without the app — web shows a blank page and Expo Go may complain about signing in.
 
 The app finds the server on the same machine that serves the JS bundle, so simulators, emulators and real phones on the same Wi-Fi all just work. To point it elsewhere, set `EXPO_PUBLIC_SERVER_URL`.
 
@@ -46,7 +50,7 @@ cd app && npx expo lint
 
 **Solo play:** in a lobby, tap **+ Add a bot**. Bots write quests, complete them with stand-in photos, and vote.
 
-**Dev shortcuts** (server runs with `DEV_TOOLS=1`): tap the black **DEV** tag in the header of any game screen to skip to the end, have everyone complete a quest, add time, deal yourself a quest with a place, or jump to verification or the scoreboard.
+**Dev shortcuts** (server runs with `DEV_TOOLS=1`, host only): tap the black **DEV** tag in the header of any game screen to skip to the end, have everyone complete a quest, add time, deal yourself a quest with a place, or jump to verification or the scoreboard.
 
 **Deep links for driving simulators** (dev): open the app with `?demo=<phase>` to land in a seeded game (you + three bots), `&place=1` to be dealt a quest with a place, `?create=1` for an empty lobby, or `?join=CODE&name=Ana` to join one.
 
@@ -60,9 +64,10 @@ On a cold start Expo Go drops the link's parameters — open the project first, 
 
 ## Deploy
 
-**Server:**
+**Server and web app** (one Worker serves both, so join links work in any browser):
 
 ```sh
+npm run web:build
 cd server
 npx wrangler login
 npx wrangler r2 bucket create side-quests-photos
@@ -73,7 +78,7 @@ npx wrangler deploy
 
 **App:** see [docs/run-on-a-phone.md](docs/run-on-a-phone.md) for installable Android and iPhone builds (EAS), TestFlight, and store release.
 
-**Web:** `cd app && npx expo export --platform web`, then host `dist/` anywhere static (e.g. Cloudflare Pages).
+**Web:** included above. The Worker serves `app/dist`, so `https://<your-worker>/join/ABCD` opens the game in any browser.
 
 ## Notes and limits
 

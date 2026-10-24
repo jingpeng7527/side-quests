@@ -1,12 +1,14 @@
 import type { Phase } from "@side-quests/game";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef } from "react";
+import { View } from "react-native";
 import { useSession } from "../lib/session";
 import { HomeScreen } from "../screens/Home";
 import { InGameScreen } from "../screens/InGame";
 import { LobbyScreen } from "../screens/Lobby";
 import { QuestsScreen, ReviewScreen } from "../screens/Quests";
 import { EndGameScreen, ScoreboardScreen, VerifyScreen } from "../screens/Results";
+import { ConnectionBanner, PhaseEntrance, TransitionBanner } from "../ui/flow";
 
 const SCREENS: Record<Phase, () => React.JSX.Element> = {
   lobby: LobbyScreen,
@@ -23,7 +25,15 @@ export default function Index() {
   useDemoLink();
   if (!state) return <HomeScreen />;
   const PhaseScreen = SCREENS[state.phase];
-  return <PhaseScreen />;
+  return (
+    <View style={{ flex: 1 }}>
+      <PhaseEntrance key={state.phase}>
+        <PhaseScreen />
+      </PhaseEntrance>
+      <TransitionBanner />
+      <ConnectionBanner />
+    </View>
+  );
 }
 
 /**

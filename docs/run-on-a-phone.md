@@ -1,47 +1,85 @@
 # Running Side Quests on a phone
 
-There are two ways to get the game onto a real iPhone or Android phone:
-
-| | **Expo Go** (quickest) | **Installed build** |
-|---|---|---|
-| Good for | Trying it out, testing changes live | Playing away from your laptop, sharing with friends |
-| Needs | The free Expo Go app; phone on the same Wi-Fi as your Mac | A deployed game server; an Expo account; for iPhones, usually a paid Apple Developer account |
-| Time | ~5 minutes | ~30–60 minutes the first time |
-| Laptop needed while playing? | Yes — it serves the app and runs the game server | No |
+| | **Play in the browser** | **Expo Go** | **Installed build** |
+|---|---|---|---|
+| For | Friends joining a game — and the quickest way to play | You, while developing | Playing without your laptop; app-store style |
+| Players need | Their phone's camera and browser. No app, no account | Expo Go, signed in to **your** Expo account | The installed app |
+| Time | 1 minute | 5 minutes | 30–60 minutes the first time |
+| Laptop needed? | Yes, it runs the game | Yes | No (needs a deployed server) |
 
 ---
 
-## Option 1: Expo Go on your phone
+## Play in the browser: `npm run party`
 
-Your Mac runs the game server and serves the app; the phone loads it over Wi-Fi.
+The game server also serves the web version of the app, so the whole game is one address. Friends scan a QR code and play in their phone's browser.
 
-1. **Install Expo Go** on the phone from the App Store or Google Play.
-2. **Start the server and the app** on your Mac (from the repo root, in two terminals):
+```sh
+npm install            # first time only
+brew install cloudflared   # first time only (free, no account)
+npm run party
+```
+
+It builds the web app, starts the game server, opens a free Cloudflare tunnel, and prints a QR code and an `https://….trycloudflare.com` link. Then:
+
+1. Everyone scans the QR code with their phone's camera and taps the link.
+2. One person (the host) taps **Create lobby**.
+3. Everyone else scans the **lobby's** QR code, or taps **Invite friends** to send the link to a group chat. The link opens a "You're invited" page that only asks for a name.
+
+Anyone with the link can reach your game while it runs; **Ctrl+C** ends the party. Each run gets a new link.
+
+**If the tunnel won't start**, the script prints cloudflared's own error. Some office and campus networks block Cloudflare tunnels altogether; the script already uses the HTTPS mode that gets through most of them. If the link shows "can't be reached" on a phone at first, wait half a minute: brand-new links take a moment to appear.
+
+**Everyone on the same Wi-Fi?** `npm run party:local` skips the tunnel and prints a link like `http://192.168.1.20:8787`. Quests with places can't show your position there: browsers only share location over https. Use `npm run party` for those.
+
+**In the browser:** proof photos use the phone's camera through the browser's photo picker. Maps are view-only, and places are set with "Use my spot".
+
+---
+
+## Expo Go (for developing)
+
+Expo Go runs the native app straight from your Mac and reloads as you edit. **It's a developer tool, not for friends:** Expo Go on an iPhone only opens a project when it's signed in to the same Expo account as the Expo CLI on your Mac. Friends should use the browser link above, or an installed build.
+
+1. Install **Expo Go** on your phone, and sign in to Expo Go and the CLI with the same account:
 
    ```sh
-   npm install       # first time only
-   npm run server    # game server on port 8787
-   npm run app       # prints a QR code
+   cd app && npx expo login
    ```
 
-   If macOS asks whether `node` or `workerd` may accept incoming network connections, click **Allow** — that's how the phone reaches your Mac.
-3. **Open it on the phone:**
-   - **iPhone:** point the Camera app at the QR code in the terminal and tap the banner.
-   - **Android:** open Expo Go and tap **Scan QR code**.
-4. Allow **location** (for quest maps) and **camera** (for proof photos) when asked.
+2. Start the server and the app (from the repo root, in two terminals):
 
-The app finds the game server automatically: it uses the same address your phone used to load the app. Friends' phones on the same Wi-Fi can join the same way, and simulators or a browser at `http://<your-mac-ip>:8081` can join the same lobby.
+   ```sh
+   npm run server    # game server on port 8787
+   npm run app       # prints a QR code — always start Expo from app/ (this does)
+   ```
 
-**Edits show up live:** save a file and the app reloads on the phone.
+   If macOS asks whether `node` or `workerd` may accept incoming network connections, click **Allow**.
+3. Scan the QR code: with the Camera app on iPhone, or Expo Go's **Scan QR code** on Android.
+
+On the same Wi-Fi the app finds the game server by itself, using your Mac's address. **Edits show up live.**
+
+### On a different network (`--tunnel`)
+
+`npx expo start --tunnel` gives the *app* a public address, but not the game server, so it can't create or join lobbies until you give the server one too:
+
+```sh
+cloudflared tunnel --url http://127.0.0.1:8787     # 127.0.0.1, not localhost (see below)
+cd app
+EXPO_PUBLIC_SERVER_URL=https://<printed-address>.trycloudflare.com npx expo start --tunnel --clear
+```
+
+**Use `127.0.0.1`, not `localhost`.** On a Mac, `localhost` resolves to the IPv6 address first, where the game server isn't listening. The tunnel then answers with a 502 and the app says it can't reach the server behind the tunnel.
 
 ### If it doesn't connect
 
 | Symptom | Fix |
 |---|---|
-| Expo Go spins, or says it can't connect to the dev server | Phone and Mac must be on the same Wi-Fi. Guest and office networks often block devices from seeing each other ("client isolation"); try a home network or your phone's hotspot. |
-| App opens but says **Can't reach the game server (http://…:8787)** | Make sure `npm run server` is running, and that you allowed incoming connections. The message shows the address the app tried. |
-| Expo Go says the project needs a newer/older SDK | Update Expo Go from the store. This project uses Expo SDK 58. |
-| Different networks entirely | Use Option 2, or deploy the server (Option 2, step 1), set `EXPO_PUBLIC_SERVER_URL=https://…workers.dev`, and run `npx expo start --tunnel` from `app/`. |
+| Expo Go spins, or can't connect to the dev server | Phone and Mac must be on the same Wi-Fi, and guest/office networks often block devices from seeing each other. Use `--tunnel`, or the browser link. |
+| Expo Go asks you to sign in | Sign in to Expo Go with the same account as `npx expo login` on your Mac. For other people, send the browser link instead. |
+| **Can't reach the game server at http://…:8787** | Make sure `npm run server` is running and incoming connections are allowed. |
+| **The tunnel … can't reach the game server behind it** | Point the tunnel at `http://127.0.0.1:8787`, not `localhost`. |
+| **You're running through a tunnel…** | Set `EXPO_PUBLIC_SERVER_URL` as shown above. |
+| The browser shows a blank page (Metro on port 8081) | Expo was started from the repo root. Start it from `app/` (`npm run app`). |
+| Expo Go says the project needs a newer/older SDK | Update Expo Go. This project uses Expo SDK 58. |
 
 ---
 
@@ -58,6 +96,7 @@ cd server
 npx wrangler login
 npx wrangler r2 bucket create side-quests-photos
 npx wrangler secret put ANTHROPIC_API_KEY   # optional: enables Claude-written quests
+(cd .. && npm run web:build)                # the server also serves the web app
 npx wrangler deploy
 ```
 

@@ -1,10 +1,11 @@
 import { DEFAULT_LOCATION, PLACE_RADIUS_OPTIONS, distance, formatDistance, type Coordinate, type QuestPlace } from "@side-quests/game";
 import * as Location from "expo-location";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { newId, useGame } from "../lib/session";
 import { DevMenu } from "../ui/DevMenu";
-import { Avatar, Body, Display, Hairline, Label, Screen, SlabButton, Tag, WaitingBar, color, font, space, usePalette } from "../ui/kit";
+import { HostAdvance, HostWaitingBar, ReadyToggle } from "../ui/flow";
+import { Avatar, Body, Display, Hairline, Label, Screen, SlabButton, Tag, color, font, space, usePalette } from "../ui/kit";
 import { PickerMap, mapsSupportPicking } from "../ui/maps";
 import { GameSettingsSheet, SettingsSummary, Stepper } from "./Lobby";
 
@@ -32,6 +33,19 @@ export function QuestsScreen() {
     setDraftPlace(undefined);
   };
 
+  // If the host moves on mid-sentence, keep what you were writing instead of dropping it.
+  const pending = useRef({ draft, draftPlace });
+  useEffect(() => {
+    pending.current = { draft, draftPlace };
+  }, [draft, draftPlace]);
+  useEffect(
+    () => () => {
+      const { draft: text, draftPlace: place } = pending.current;
+      if (text.trim()) send({ type: "addQuest", quest: { id: newId(), text: text.trim(), place, authorId: me.id, source: "human", included: true } });
+    },
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   return (
     <Screen
       index="02"
@@ -40,16 +54,9 @@ export function QuestsScreen() {
       accessory={<DevMenu />}
       footer={
         isHost ? (
-          <>
-            <SettingsSummary settings={state.settings} editable onEdit={() => setEditing(true)} />
-            <SlabButton
-              title="Review deck"
-              disabled={!state.quests.length && !state.settings.aiStarterCount}
-              onPress={() => send({ type: "setPhase", phase: "review" })}
-            />
-          </>
+          <HostAdvance title="Review deck" waitingVerb="writing" disabled={!state.quests.length && !state.settings.aiStarterCount} />
         ) : (
-          <WaitingBar text="Host reviews when ready" />
+          <ReadyToggle doneLabel="I'm done writing" notDoneLabel="Keep writing" />
         )
       }
     >
@@ -131,6 +138,8 @@ export function QuestsScreen() {
             />
           )}
         </View>
+
+        {isHost && <SettingsSummary settings={state.settings} editable onEdit={() => setEditing(true)} />}
       </ScrollView>
       <GameSettingsSheet visible={editing} onClose={() => setEditing(false)} />
       <PlacePicker
@@ -344,9 +353,9 @@ export function ReviewScreen() {
       accessory={<DevMenu />}
       footer={
         isHost ? (
-          <SlabButton title={`Deal · ${state.settings.durationMinutes}:00`} disabled={!included} onPress={() => send({ type: "startGame" })} />
+          <HostAdvance title={`Deal · ${state.settings.durationMinutes}:00`} disabled={!included} />
         ) : (
-          <WaitingBar text="Get ready" />
+          <HostWaitingBar text="Get ready" />
         )
       }
     >
@@ -362,8 +371,10 @@ export function ReviewScreen() {
                   <Body color={q.included ? color.inkBlack : color.stone} style={{ textDecorationLine: q.included ? "none" : "line-through" }}>
                     {q.text}
                   </Body>
-                  {q.place && <PlaceChip place={q.place} />}
-                  {q.source === "ai" ? <Tag text="AI" filled /> : <Tag text={state.players.find((p) => p.id === q.authorId)?.name ?? "—"} />}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.s }}>
+                    {q.source === "ai" ? <Tag text="AI" filled /> : <Tag text={state.players.find((p) => p.id === q.authorId)?.name ?? "—"} />}
+                    {q.place && <PlaceChip place={q.place} />}
+                  </View>
                 </View>
               </Pressable>
               <Hairline style={{ marginLeft: 38 }} />

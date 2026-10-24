@@ -13,7 +13,8 @@ export function DevMenu() {
   const { state, dev, isHost } = useSession();
   const pal = usePalette();
   const [open, setOpen] = useState(false);
-  if (!state?.devTools) return null;
+  // Host only: these end games and add bots for everyone.
+  if (!state?.devTools || !isHost) return null;
 
   const phase = state.phase;
   const items: [string, DevOp, boolean?][] = [

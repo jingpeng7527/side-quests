@@ -12,3 +12,6 @@ web-build/
 app/ios/
 app/android/
 *.tsbuildinfo
+.env
+.env.*
+!.env.example

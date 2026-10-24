@@ -3,10 +3,17 @@ import { JetBrainsMono_600SemiBold, JetBrainsMono_700Bold } from "@expo-google-f
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SessionProvider } from "../lib/session";
 import { color } from "../ui/theme";
+
+// Web: text fields draw their own focus underline, so drop the browser's boxy outline.
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  const style = document.createElement("style");
+  style.textContent = "input:focus, textarea:focus { outline: none; }";
+  document.head.appendChild(style);
+}
 
 export default function RootLayout() {
   const [loaded] = useFonts({ BigShouldersDisplay_900Black, JetBrainsMono_600SemiBold, JetBrainsMono_700Bold });

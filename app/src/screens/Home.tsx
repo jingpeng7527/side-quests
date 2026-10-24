@@ -24,7 +24,13 @@ export function HomeScreen() {
       art={halftones.home}
       footer={
         <>
-          {error && <Label color={color.paperBright}>{error}</Label>}
+          {error && (
+            <View accessibilityLiveRegion="polite" style={{ backgroundColor: color.inkBlack, padding: space.m }}>
+              <Body size={14} color={color.paperBright}>
+                {error}
+              </Body>
+            </View>
+          )}
           <SlabButton
             title={connecting ? "Creating…" : "Create lobby"}
             disabled={!trimmed || connecting}
@@ -69,7 +75,7 @@ export function HomeScreen() {
             autoCorrect={false}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            style={{ fontFamily: font.display, fontSize: 48, color: color.paperBright, paddingVertical: 4, textTransform: "uppercase" }}
+            style={{ fontFamily: font.display, fontSize: 48, color: color.paperBright, paddingVertical: 4 }}
           />
           <Hairline emphasized={focused} />
         </View>
