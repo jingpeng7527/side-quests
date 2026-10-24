@@ -1,5 +1,5 @@
 import Feather from "@expo/vector-icons/Feather";
-import { approvals, formatDistance, isVerified, ranking, rejections, wasAtPlace, type GameState, type Player, type Submission } from "@side-quests/game";
+import { approvals, formatDistance, isVerified, questPoints, ranking, rejections, wasAtPlace, type GameState, type Player, type Submission } from "@side-quests/game";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
@@ -8,6 +8,7 @@ import { DevMenu } from "../ui/DevMenu";
 import { HostAdvance, HostWaitingBar, ReadyToggle, Reveal, TextAction } from "../ui/flow";
 import { Avatar, Body, Display, Hairline, Label, Screen, SectionLabel, Tag, color, radius, space } from "../ui/kit";
 import { RouteMap } from "../ui/maps";
+import { PointsBadge } from "../ui/Points";
 import { ProofImage } from "../ui/Proof";
 
 export function EndGameScreen() {
@@ -173,9 +174,12 @@ function ProofCard({ sub, state, width, myVote, onZoom, onVote }: { sub: Submiss
       </Pressable>
       <View style={{ gap: 2 }}>
         <Body size={15}>{quest?.text ?? ""}</Body>
-        <Body size={14} color={color.stone}>
-          — {name}
-        </Body>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.s }}>
+          <Body size={14} color={color.stone}>
+            — {name}
+          </Body>
+          <PointsBadge points={questPoints(state, quest)} tone="outline" />
+        </View>
       </View>
       <View style={{ flexDirection: "row", gap: space.s }}>
         <VoteButton text="Counts" icon="check" active={myVote === true} onPress={() => onVote(true)} />
@@ -227,7 +231,7 @@ function Podium({ player, place, score, quests, isMe }: { player: Player; place:
         {player.name}
       </Body>
       <Label size={10} numberOfLines={1}>
-        {score} verified
+        {score} {score === 1 ? "pt" : "pts"}
       </Label>
     </View>
   );
@@ -285,7 +289,12 @@ export function ScoreboardScreen() {
                   {row.player.id === me.id ? <Body color={color.stone}> (you)</Body> : null}
                 </Body>
                 {row.player.id === state.hostId && <Tag text="Host" />}
-                <Display size={34}>{String(row.score)}</Display>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
+                  <Display size={34}>{String(row.score)}</Display>
+                  <Label size={10} bold>
+                    pts
+                  </Label>
+                </View>
               </View>
               <Hairline />
             </Reveal>

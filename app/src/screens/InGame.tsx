@@ -1,5 +1,5 @@
 import Feather from "@expo/vector-icons/Feather";
-import { distance, formatDistance, newSeed, type Coordinate, type QuestPlace, type WalkingRoute } from "@side-quests/game";
+import { claimedPoints, distance, formatDistance, newSeed, questPoints, type Coordinate, type QuestPlace, type WalkingRoute } from "@side-quests/game";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import { fitBlock, fitLine } from "../ui/fit";
 import { easeIn, useToast } from "../ui/flow";
 import { Avatar, Body, Button, Card, Display, Label, PaletteProvider, Screen, SectionLabel, Tag, color, radius, space } from "../ui/kit";
 import { QuestMap } from "../ui/maps";
+import { PointsBadge } from "../ui/Points";
 import { ProofImage } from "../ui/Proof";
 
 export function InGameScreen() {
@@ -96,9 +97,12 @@ export function InGameScreen() {
               <Display size={questSize} color={color.signalRed} style={{ marginVertical: 2 }}>
                 {myQuest.text}
               </Display>
-              <Label size={12} bold color={color.signalRed}>
-                #{done + 1}
-              </Label>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Label size={12} bold color={color.signalRed}>
+                  #{done + 1}
+                </Label>
+                <PointsBadge points={questPoints(state, myQuest)} size="lg" />
+              </View>
             </Card>
           </PaletteProvider>
         ) : (
@@ -155,7 +159,8 @@ function LiveDot() {
 function Standings() {
   const { state, me } = useGame();
   const rows = state.players
-    .map((p) => ({ p, n: state.submissions.filter((s) => s.playerId === p.id).length }))
+    // Points claimed so far — friends vote on them at the end.
+    .map((p) => ({ p, n: claimedPoints(state, p.id) }))
     .sort((a, b) => Number(b.p.id === me.id) - Number(a.p.id === me.id) || b.n - a.n);
   return (
     <View style={{ gap: space.s }}>
@@ -175,10 +180,14 @@ function Standings() {
               <Label size={11} bold color={color.paperBright} numberOfLines={1} style={{ maxWidth: 72, textTransform: "none" }}>
                 {p.id === me.id ? "You" : p.name}
               </Label>
-              {p.id === state.hostId && <Tag text="Host" tone="paper" />}
+              {/* Same-height slot for everyone, so the scores line up. */}
+              <View style={{ height: 20, justifyContent: "center" }}>{p.id === state.hostId && <Tag text="Host" tone="paper" />}</View>
               <Display size={26} skew={false}>
-                {String(n)}
+                {`${n}`}
               </Display>
+              <Label size={9} bold color={color.paperBright}>
+                pts
+              </Label>
             </View>
           );
         })}

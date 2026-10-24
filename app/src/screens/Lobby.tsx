@@ -115,7 +115,12 @@ export function PlayerRow({ player, state, isMe, trailing }: { player: Player; s
 /** "15 MIN · 3 SKIPS · AI ON" with a way into the settings for the host. */
 export function SettingsSummary({ settings, editable, onEdit }: { settings: GameSettings; editable: boolean; onEdit: () => void }) {
   const pal = usePalette();
-  const summary = [`${settings.durationMinutes} min`, settings.allowSkips ? `${settings.maxSkips} skips` : "no skips", settings.aiRefill ? "AI on" : "AI off"].join(" · ");
+  const summary = [
+    `${settings.durationMinutes} min`,
+    settings.allowSkips ? `${settings.maxSkips} skips` : "no skips",
+    settings.difficultyScoring !== false ? "1–5 pts" : "1 pt each",
+    settings.aiRefill ? "AI on" : "AI off",
+  ].join(" · ");
   return (
     <Pressable
       disabled={!editable}
@@ -176,6 +181,12 @@ export function GameSettingsSheet({ visible, onClose }: { visible: boolean; onCl
           </View>
           <SwitchRow label="Skips allowed" value={s.allowSkips} onChange={(v) => update({ allowSkips: v })} />
           {s.allowSkips && <Stepper label="Skips per player" value={s.maxSkips} min={1} max={10} onChange={(v) => update({ maxSkips: v })} />}
+          <SwitchRow
+            label="Harder = more points"
+            detail="AI rates each quest 1–5 on time, nerve and effort. Off: every quest is worth 1."
+            value={s.difficultyScoring !== false}
+            onChange={(v) => update({ difficultyScoring: v })}
+          />
           <SwitchRow label="AI refills" detail="Writes new quests when the deck runs dry" value={s.aiRefill} onChange={(v) => update({ aiRefill: v })} />
           <Stepper label="AI starter quests" value={s.aiStarterCount} min={0} max={10} onChange={(v) => update({ aiStarterCount: v })} />
           <Label size={11}>{state.aiMode === "ai" ? "Quest writer: AI" : "Quest writer: offline deck (no API key on the server)"}</Label>

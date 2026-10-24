@@ -9,6 +9,7 @@ import { DevMenu } from "../ui/DevMenu";
 import { HostAdvance, HostWaitingBar, ReadyToggle } from "../ui/flow";
 import { Avatar, Body, Button, Card, Display, IconButton, Label, Screen, SectionLabel, Tag, color, font, radius, space, usePalette } from "../ui/kit";
 import { PickerMap } from "../ui/maps";
+import { DifficultyMeter, PointsStepper, RatingLine } from "../ui/Points";
 import { GameSettingsSheet } from "./Lobby";
 
 const MAX_QUEST = 100;
@@ -55,6 +56,7 @@ function QuestCard({ quest, state, mine, onRemove }: { quest: Quest; state: Game
           </View>
         )}
         {mine && quest.place && <PlaceChip place={quest.place} />}
+        {mine && <RatingLine quest={quest} state={state} />}
         <Label size={10}>{quest.source === "ai" ? "AI" : author?.name ?? "—"}</Label>
       </View>
       {onRemove ? (
@@ -477,6 +479,7 @@ export function ReviewScreen() {
   const { state, me, isHost, send } = useGame();
   const [adding, setAdding] = useState("");
   const included = state.quests.filter((q) => q.included).length;
+  const scoring = state.settings.difficultyScoring !== false;
 
   return (
     <Screen
@@ -487,12 +490,23 @@ export function ReviewScreen() {
       {isHost ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: space.l, gap: space.s }}>
           <SectionLabel right={<Label size={11}>{included} in play</Label>}>Deck ({state.quests.length})</SectionLabel>
+          {scoring && (
+            <Body size={12} color={color.stone}>
+              {"Harder quests are worth more. Points are rated from time, nerve and effort — use − / + to overrule."}
+            </Body>
+          )}
           {state.quests.map((q) => {
             const author = state.players.find((p) => p.id === q.authorId);
             return (
-              <Pressable key={q.id} onPress={() => send({ type: "toggleQuest", questId: q.id })} accessibilityRole="checkbox" accessibilityState={{ checked: q.included }}>
-                <Card style={{ flexDirection: "row", gap: space.m, alignItems: "center", opacity: q.included ? 1 : 0.55, paddingVertical: 12 }}>
-                  <View style={{ width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: q.included ? color.signalRed : "transparent", borderWidth: 2, borderColor: q.included ? color.signalRed : color.stone }}>
+              <Card key={q.id} style={{ gap: space.s, opacity: q.included ? 1 : 0.55, paddingVertical: 12 }}>
+                <Pressable
+                  onPress={() => send({ type: "toggleQuest", questId: q.id })}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: q.included }}
+                  accessibilityLabel={`Include: ${q.text}`}
+                  style={{ flexDirection: "row", gap: space.m, alignItems: "flex-start" }}
+                >
+                  <View style={{ width: 26, height: 26, borderRadius: 8, marginTop: 2, alignItems: "center", justifyContent: "center", backgroundColor: q.included ? color.signalRed : "transparent", borderWidth: 2, borderColor: q.included ? color.signalRed : color.stone }}>
                     {q.included && <Feather name="check" size={16} color={color.paperBright} />}
                   </View>
                   <View style={{ flex: 1, gap: 6 }}>
@@ -504,8 +518,21 @@ export function ReviewScreen() {
                       {q.place && <PlaceChip place={q.place} />}
                     </View>
                   </View>
-                </Card>
-              </Pressable>
+                </Pressable>
+                {scoring && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingLeft: 26 + space.m }}>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      {q.difficulty && <DifficultyMeter difficulty={q.difficulty} />}
+                      {q.difficulty?.why && q.difficulty.by !== "host" ? (
+                        <Body size={11} color={color.stone}>
+                          {q.difficulty.why}
+                        </Body>
+                      ) : null}
+                    </View>
+                    <PointsStepper quest={q} state={state} onChange={(points) => send({ type: "setQuestPoints", questId: q.id, points })} />
+                  </View>
+                )}
+              </Card>
             );
           })}
           {state.aiWriting && (

@@ -20,6 +20,8 @@ The server is the referee: every phone sends actions, the lobby's Durable Object
 
 **Moving the game along:** only the host moves between phases, and never abruptly. A host request shows everyone a 3-second "moving to…" banner, which the host can cancel, before the server lands it. While writing and judging, players tap **I'm done**; the host sees how many are done and is asked to confirm before moving on early. Players whose phones drop off are marked away and don't hold anyone up. A half-written quest is saved if the phase changes, and a photo snapped before the buzzer still counts if its upload finishes just after.
 
+**Scoring:** harder quests are worth more. Each quest is rated as it's written, from 1 to 5 on time (how long it takes), nerve (how awkward or embarrassing it is) and effort (travel, props, physical work); the average becomes 1–5 points. Ratings come from OpenAI when the server has a key (`server/src/ratings.ts`), otherwise from an offline keyword estimate. Authors see their quest's rating while writing; in review the host sees every rating with its reason and can overrule it with − / +, and the rater never overwrites the host's call. A verified proof earns its quest's points. Turn off **Harder = more points** in game settings to make every quest worth 1.
+
 ## Run it locally
 
 ```sh
