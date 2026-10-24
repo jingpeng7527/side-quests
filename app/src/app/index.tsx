@@ -8,7 +8,7 @@ import { InGameScreen } from "../screens/InGame";
 import { LobbyScreen } from "../screens/Lobby";
 import { QuestsScreen, ReviewScreen } from "../screens/Quests";
 import { EndGameScreen, ScoreboardScreen, VerifyScreen } from "../screens/Results";
-import { ConnectionBanner, PhaseEntrance, TransitionBanner } from "../ui/flow";
+import { ConnectionBanner, HostChangeNotice, PhaseEntrance, TransitionBanner } from "../ui/flow";
 
 const SCREENS: Record<Phase, () => React.JSX.Element> = {
   lobby: LobbyScreen,
@@ -32,6 +32,7 @@ export default function Index() {
       </PhaseEntrance>
       <TransitionBanner />
       <ConnectionBanner />
+      <HostChangeNotice />
     </View>
   );
 }

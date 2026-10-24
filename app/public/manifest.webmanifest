@@ -1,0 +1,14 @@
+{
+  "name": "Side Quests",
+  "short_name": "Side Quests",
+  "description": "Write dares for your friends. Get dealt theirs. Prove it with a photo before the clock runs out.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#D9241C",
+  "theme_color": "#D9241C",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

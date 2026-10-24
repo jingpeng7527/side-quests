@@ -268,7 +268,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       myQuest,
       mySkipsLeft,
       submitProof,
-      uploadPhoto,
+      uploadPhoto: (uri: string) => uploadPhoto(state?.code ?? "", uri),
     }),
     [me, setName, state, connecting, connected, error, clockOffset, location, createLobby, joinLobby, leave, send, dev, myQuest, mySkipsLeft, submitProof],
   );
@@ -282,13 +282,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
  * (it silently sent "File not found" instead of the image), and base64 behaves the
  * same on iOS, Android and web.
  */
-async function uploadPhoto(uri: string): Promise<Proof> {
+async function uploadPhoto(code: string, uri: string): Promise<Proof> {
   const ctx = ImageManipulator.manipulate(uri);
   ctx.resize({ width: 1080 });
   const image = await ctx.renderAsync();
   const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.7, base64: true });
   if (!saved.base64) throw new Error("couldn't read the photo");
-  const res = await fetchWithTimeout(`${serverUrl()}/api/photos`, {
+  // Photos live with their lobby (and are deleted with it).
+  const res = await fetchWithTimeout(`${serverUrl()}/api/lobbies/${code}/photos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ data: saved.base64.replace(/^data:image\/\w+;base64,/, "") }),

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <!-- viewport-fit=cover so the red field runs under the notch; the app pads with safe-area insets. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Side Quests</title>
+    <meta name="description" content="Write dares for your friends. Get dealt theirs. Prove it with a photo before the clock runs out." />
+    <meta name="theme-color" content="#D9241C" />
+    <!-- Add to Home Screen: launches full-screen, like an app. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Side Quests" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Link previews (group chats) -->
+    <meta property="og:title" content="Side Quests" />
+    <meta property="og:description" content="You're invited — write dares, get dealt your friends', prove it with a photo." />
+    <meta property="og:image" content="/icon-512.png" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        /* Paper, so there's no white flash before the app paints. */
+        background: #f6f2ec;
+      }
+      body {
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript> Side Quests needs JavaScript to run. </noscript>
+    <div id="root"></div>
+  </body>
+</html>

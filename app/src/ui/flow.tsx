@@ -298,3 +298,21 @@ export function HostWaitingBar({ text }: { text: string }) {
   const host = state.players.find((p) => p.id === state.hostId)?.name ?? "The host";
   return <WaitingBar text={hostAway ? `${host}'s phone dropped off — hang tight` : text} />;
 }
+
+/** When hosting passes to you (the old host's phone dropped off), say so. */
+export function HostChangeNotice() {
+  const { state, me } = useSession();
+  const toast = useToast();
+  const hostId = state?.hostId;
+  const previous = useRef(hostId);
+  useEffect(() => {
+    if (previous.current && hostId && previous.current !== hostId) {
+      const old = state?.players.find((p) => p.id === previous.current)?.name ?? "The host";
+      const next = state?.players.find((p) => p.id === hostId)?.name ?? "Someone";
+      toast.show(hostId === me.id ? `${old} dropped off — you're the host now` : `${next} is the host now`);
+      if (hostId === me.id) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    previous.current = hostId;
+  }, [hostId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return toast.node;
+}

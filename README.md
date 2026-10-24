@@ -10,7 +10,7 @@ Runs on **iOS, Android and the web** from one codebase.
 
 ```
 packages/game/   Shared TypeScript: types, game rules, wire protocol, places (+ tests)
-server/          Cloudflare Worker — one Durable Object per lobby, photo storage (R2),
+server/          Cloudflare Worker — one Durable Object per lobby, photos stored with each lobby,
                  Claude quest writer, walking directions, bots, dev shortcuts
 app/             Expo (React Native + expo-router) app for iOS, Android and web
 legacy-swiftui/  The original SwiftUI prototype, kept as a reference
@@ -67,14 +67,11 @@ On a cold start Expo Go drops the link's parameters — open the project first, 
 **Server and web app** (one Worker serves both, so join links work in any browser):
 
 ```sh
-npm run web:build
-cd server
-npx wrangler login
-npx wrangler r2 bucket create side-quests-photos
-npx wrangler secret put ANTHROPIC_API_KEY
-# set DEV_TOOLS to "0" in wrangler.jsonc for production
-npx wrangler deploy
+cd server && npx wrangler login && cd ..    # once
+npm run deploy                              # builds the web app, deploys with DEV_TOOLS off
 ```
+
+It prints your permanent address, `https://side-quests.<your-subdomain>.workers.dev`. Lobbies and their photos live in Durable Object storage (free tier) and are deleted after 24 quiet hours. Nothing else to set up. For Claude-written quests: `cd server && npx wrangler secret put ANTHROPIC_API_KEY`.
 
 **App:** see [docs/run-on-a-phone.md](docs/run-on-a-phone.md) for installable Android and iPhone builds (EAS), TestFlight, and store release.
 
@@ -85,4 +82,5 @@ npx wrangler deploy
 - **Maps:** react-native-maps (Apple Maps on iOS, Google Maps on Android). Android builds (not Expo Go) need a Google Maps API key via `GOOGLE_MAPS_ANDROID_API_KEY` — see the phone guide. On web, maps are view-only OpenStreetMap embeds and the place picker offers "use my spot" instead of search and tap-to-pin.
 - **Walking routes** come from the free FOSSGIS OSRM router (OpenStreetMap data, fair-use). Swap in a keyed provider or self-hosted OSRM before launch.
 - **Place search** uses the phone's geocoder (`expo-location`), which finds addresses and well-known landmarks rather than any business by name.
-- **Photos** are downscaled on the phone and stored in R2; the game state only carries their paths.
+- **Photos** are downscaled on the phone and stored with their lobby; the game state only carries their paths. A lobby and its photos are deleted 24 hours after anything last happened in it.
+- **Hosting** passes to another player if the host's phone has been away for a minute, so a game never stalls.

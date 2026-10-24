@@ -13,7 +13,8 @@
     "app": "npm run start -w app",
     "web:build": "cd app && npx expo export --platform web",
     "party": "node scripts/party.mjs",
-    "party:local": "node scripts/party.mjs --local"
+    "party:local": "node scripts/party.mjs --local",
+    "deploy": "npm run web:build && npm run deploy -w server"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,

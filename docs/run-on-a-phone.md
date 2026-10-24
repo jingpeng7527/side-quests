@@ -92,17 +92,14 @@ An installed build is the real app, with its own name and icon, and it keeps wor
 You need a free Cloudflare account.
 
 ```sh
-cd server
-npx wrangler login
-npx wrangler r2 bucket create side-quests-photos
-npx wrangler secret put ANTHROPIC_API_KEY   # optional: enables Claude-written quests
-(cd .. && npm run web:build)                # the server also serves the web app
-npx wrangler deploy
+cd server && npx wrangler login && cd ..
+npm run deploy
+npx wrangler secret put ANTHROPIC_API_KEY --cwd server   # optional: enables Claude-written quests
 ```
 
-`deploy` prints your server's URL, like `https://side-quests.<your-subdomain>.workers.dev`. Check it with `curl <url>/api/health`.
+`deploy` builds the web app, deploys it with the game server, and prints the address, like `https://side-quests.<your-subdomain>.workers.dev`. Check it with `curl <url>/api/health`. The DEV menu (bots, skip to end) is off in deployed builds and on in local development.
 
-`DEV_TOOLS` is `"1"` in `server/wrangler.jsonc`, which shows the DEV menu (bots, skip to end). That's handy for test builds; set it to `"0"` and redeploy before sharing widely.
+That address is also a permanent browser link: anyone can open it and play, no tunnel or laptop needed.
 
 ### Step 2: Point the app at it
 
