@@ -1,3 +1,4 @@
+import { listCatalog } from "./catalog";
 import { walkingRoute } from "./directions";
 import { nameSpot, searchPlaces } from "./geocode";
 import type { Env } from "./lobby";
@@ -81,6 +82,17 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (parts[1] === "health") return Response.json({ ok: true, ai: env.OPENAI_API_KEY ? "ai" : "offline" });
+
+  // GET /api/catalog/quests?limit=20&verified=1&random=1 -> CatalogEntry[]
+  // Human-written quests pulled from finished games (not AI ones, and not just written
+  // ones) — for LLM inspiration or future curation. Nothing in the app calls this yet.
+  if (parts[1] === "catalog" && parts[2] === "quests") {
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 20));
+    const verifiedOnly = url.searchParams.get("verified") === "1";
+    const random = url.searchParams.get("random") === "1";
+    return Response.json(await listCatalog(env.CATALOG, { limit, verifiedOnly, random }));
+  }
+
   return new Response("not found", { status: 404 });
 }
 
