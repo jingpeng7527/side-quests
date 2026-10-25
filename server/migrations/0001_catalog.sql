@@ -1,4 +1,5 @@
-CREATE TABLE catalog_quests (
+-- IF NOT EXISTS: safe if the table was created before migrations were tracked (CI applies these on every deploy).
+CREATE TABLE IF NOT EXISTS catalog_quests (
   id TEXT PRIMARY KEY,
   text TEXT NOT NULL,
   source TEXT NOT NULL,           -- 'human' | 'ai'

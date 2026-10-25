@@ -87,14 +87,14 @@ function useFit(map: React.RefObject<MapView | null>, points: Coordinate[], key:
  * out, leaving an invisible pin; track for a moment, then stop (it's costly).
  */
 function useTracksViewChanges(key: string) {
-  const [tracking, setTracking] = useState(true);
+  // Tracking stops once this key has had its moment; a new key tracks again.
+  const [settled, setSettled] = useState<string | null>(null);
   useEffect(() => {
     if (Platform.OS === "android") return;
-    setTracking(true);
-    const t = setTimeout(() => setTracking(false), 800);
+    const t = setTimeout(() => setSettled(key), 800);
     return () => clearTimeout(t);
   }, [key]);
-  return Platform.OS === "android" || tracking;
+  return Platform.OS === "android" || settled !== key;
 }
 
 /** In game: the quest's spot, its radius, you, and the walk between. */

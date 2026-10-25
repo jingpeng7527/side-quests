@@ -197,26 +197,20 @@ export function GameSettingsSheet({ visible, onClose }: { visible: boolean; onCl
 
 /** Type any number of minutes; the quick picks below fill it in. Commits on blur or return. */
 function DurationField({ minutes, onChange }: { minutes: number; onChange: (m: number) => void }) {
-  const [text, setText] = useState(String(minutes));
-  const [focused, setFocused] = useState(false);
-  useEffect(() => {
-    if (!focused) setText(String(minutes));
-  }, [minutes, focused]);
+  // What's being typed, while the field has focus; otherwise it shows the live setting.
+  const [draft, setDraft] = useState<string | null>(null);
+  const focused = draft !== null;
   const commit = () => {
-    setFocused(false);
-    const n = parseInt(text, 10);
-    if (Number.isFinite(n)) {
-      const m = clampDuration(n);
-      setText(String(m));
-      if (m !== minutes) onChange(m);
-    } else setText(String(minutes));
+    const n = parseInt(draft ?? "", 10);
+    setDraft(null);
+    if (Number.isFinite(n) && clampDuration(n) !== minutes) onChange(clampDuration(n));
   };
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space.m }}>
       <TextInput
-        value={text}
-        onChangeText={(t) => setText(t.replace(/[^0-9]/g, "").slice(0, 3))}
-        onFocus={() => setFocused(true)}
+        value={draft ?? String(minutes)}
+        onChangeText={(t) => setDraft(t.replace(/[^0-9]/g, "").slice(0, 3))}
+        onFocus={() => setDraft(String(minutes))}
         onBlur={commit}
         onSubmitEditing={commit}
         keyboardType="number-pad"

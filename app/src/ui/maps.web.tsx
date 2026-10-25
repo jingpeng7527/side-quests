@@ -80,8 +80,10 @@ function LeafletMap({
   const tap = useRef(onTap);
   const moved = useRef(onUserMove);
   const paint = useRef(draw);
-  paint.current = draw;
   const initialView = useRef({ centerKey, zoom });
+  useEffect(() => {
+    paint.current = draw;
+  });
   useEffect(() => {
     tap.current = onTap;
   }, [onTap]);

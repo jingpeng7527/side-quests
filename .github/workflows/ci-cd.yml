@@ -37,6 +37,15 @@ jobs:
       - run: npm ci
       # Builds app/dist; `wrangler deploy` below serves it alongside the game.
       - run: npm run web:build
+      # Database first: new code may read or write columns a pending migration adds.
+      # Already-applied migrations are skipped. Needs D1 edit permission on the API token.
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: be57d7818a375a509fef13d5dd81ff40
+          workingDirectory: server
+          command: d1 migrations apply CATALOG --remote
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
