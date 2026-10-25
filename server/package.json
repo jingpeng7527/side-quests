@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../scripts/ensure-web.mjs && wrangler dev --ip 0.0.0.0 --port 8787",
+    "dev": "node ../scripts/ensure-web.mjs && wrangler d1 migrations apply CATALOG --local && wrangler dev --ip 0.0.0.0 --port 8787",
     "deploy": "node ../scripts/ensure-web.mjs && wrangler deploy --var DEV_TOOLS:0",
     "typecheck": "tsc --noEmit",
     "test": "node --test src/geocode.test.mjs src/ratings.test.mjs"
