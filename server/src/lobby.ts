@@ -7,6 +7,8 @@ import {
   demoPlace,
   distance,
   freshQuestCount,
+  hostAfterGrace,
+  hostAfterLeave,
   newGame,
   nextHost,
   newSeed,
@@ -52,6 +54,8 @@ export class Lobby extends DurableObject<Env> {
   /** Quests being rated right now, and the timer that batches the next lot. */
   private rating = new Set<string>();
   private rateTimer: ReturnType<typeof setTimeout> | null = null;
+  private hostHandoffTimer: ReturnType<typeof setTimeout> | null = null;
+  private expiredHandoffHost: string | null = null;
   /** When a top-up adds nothing new (deck exhausted, duplicates), wait before asking again. */
   private aiRetryAfter = 0;
   private bots = new Bots(this);
@@ -187,6 +191,7 @@ export class Lobby extends DurableObject<Env> {
         if (msg.location) this.noteLocation(msg.player.id, msg.location);
         this.dispatch({ type: "join", player: msg.player }, msg.player.id);
         this.dispatch({ type: "setAway", playerId: msg.player.id, away: false }, "server");
+        this.reconcileHost();
         this.send(ws, this.snapshot());
         return;
       case "location":
@@ -224,9 +229,25 @@ export class Lobby extends DurableObject<Env> {
       if (from) this.send(from, { type: "error", message: `not allowed: ${action.type}` });
       return;
     }
-    const next = apply(prev, action);
+    let next = apply(prev, action);
+    const hostLeft = action.type === "leave" && action.playerId === prev.hostId;
+    if (hostLeft) {
+      this.stopHostHandoffTimer();
+      this.expiredHandoffHost = prev.hostId;
+      const heir = hostAfterLeave(next, action.playerId, this.connectedPlayers());
+      if (heir) next = apply(next, { type: "setHost", playerId: heir.id });
+    }
     if (next === prev) return;
     this.state = next;
+    if (hostLeft && next.hostId !== prev.hostId) this.expiredHandoffHost = null;
+    if (action.type === "setHost") {
+      this.stopHostHandoffTimer();
+      this.expiredHandoffHost = null;
+    }
+    if (action.type === "setAway" && !action.away && action.playerId === prev.hostId) {
+      this.stopHostHandoffTimer();
+      this.expiredHandoffHost = null;
+    }
     // Only people keep a lobby alive — bots and the server's own bookkeeping don't.
     void this.persist(actor !== "server");
     this.broadcast();
@@ -237,18 +258,47 @@ export class Lobby extends DurableObject<Env> {
     }
     if (action.type === "requestPhase" && next.transition) this.landTransition(next.transition);
     if (action.type === "addQuest" || action.type === "addAIQuests" || (next.phase === "review" && prev.phase !== "review")) this.rateSoon();
-    if (action.type === "setAway" && action.away && action.playerId === next.hostId) this.handOffHostLater();
+    if (action.type === "setAway" && action.away && action.playerId === next.hostId) this.handOffHostLater(next.hostId);
     this.topUpQuests();
   }
 
-  /** If the host is still away after HOST_HANDOFF_MS, someone who's here takes over — so the game never stalls. */
-  private handOffHostLater() {
-    setTimeout(() => {
-      const s = this.state;
-      if (!s?.away?.includes(s.hostId)) return;
-      const heir = nextHost(s);
-      if (heir) this.dispatch({ type: "setHost", playerId: heir.id }, "server");
+  private connectedPlayers() {
+    return new Set(this.sockets.values());
+  }
+
+  private stopHostHandoffTimer() {
+    if (this.hostHandoffTimer) clearTimeout(this.hostHandoffTimer);
+    this.hostHandoffTimer = null;
+  }
+
+  /** If the same host is still away after the grace period, an online human takes over. */
+  private handOffHostLater(hostId: string) {
+    this.stopHostHandoffTimer();
+    this.expiredHandoffHost = null;
+    this.hostHandoffTimer = setTimeout(() => {
+      this.hostHandoffTimer = null;
+      this.expiredHandoffHost = hostId;
+      this.reconcileHost();
     }, Number(this.env.HOST_HANDOFF_SECONDS) * 1000 || HOST_HANDOFF_MS);
+  }
+
+  /** Handles an expired handoff and hosts orphaned by a voluntary lobby departure. */
+  private reconcileHost() {
+    const s = this.state;
+    if (!s) return;
+    const hostMissing = !s.players.some((p) => p.id === s.hostId);
+    const hostExpired = this.expiredHandoffHost === s.hostId;
+    if (!hostMissing && (s.away ?? []).includes(s.hostId) && !hostExpired && !this.hostHandoffTimer) {
+      // Durable Object restarts lose in-memory timers; restart the grace period
+      // when a connected player first returns to the lobby.
+      this.handOffHostLater(s.hostId);
+      return;
+    }
+    if (!hostMissing && !hostExpired) return;
+    const heir = hostMissing
+      ? nextHost(s, this.connectedPlayers())
+      : hostAfterGrace(s, s.hostId, this.connectedPlayers());
+    if (heir) this.dispatch({ type: "setHost", playerId: heir.id }, "server");
   }
 
   /** After everyone's had the heads-up, make the requested phase change — unless the host called it off. */
