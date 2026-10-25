@@ -67,9 +67,11 @@ export default function JoinLink() {
           </Body>
         </View>
         <View style={{ gap: space.s, marginBottom: space.s }}>
-          <Label size={12} bold color={color.paperBright}>
-            {needName && !name ? "Add your name first" : "Your name"}
-          </Label>
+          {needName && !name && (
+            <Label size={12} bold color={color.paperBright}>
+              Add your name first
+            </Label>
+          )}
           <NameField inputRef={input} value={draft ?? me.name} onChange={setDraft} onSubmit={join} shake={x} />
         </View>
       </View>

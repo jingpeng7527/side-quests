@@ -1,5 +1,5 @@
 import type { Action, GameState, ID, Phase, Player, Quest, QuestDifficulty, Submission } from "./types";
-import { DEFAULT_POINTS, DEFAULT_SETTINGS, JUDGES_PER_PROOF, MAX_POINTS, MAX_STARS, MIN_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS } from "./types";
+import { DEFAULT_POINTS, DEFAULT_SETTINGS, JUDGES_PER_PROOF, MAX_DURATION_MINUTES, MAX_POINTS, MAX_STARS, MIN_DURATION_MINUTES, MIN_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS } from "./types";
 
 /** Who sent an action: a player id, or the server itself (bots, AI, clock). */
 export type Actor = ID | "server";
@@ -153,7 +153,7 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
     }
 
     case "updateSettings":
-      s.settings = action.settings;
+      s.settings = { ...action.settings, durationMinutes: clampDuration(action.settings.durationMinutes) };
       return s;
 
     case "addQuest": {
@@ -347,10 +347,28 @@ export function acceptingProofs(s: GameState, takenAt: number, now = Date.now())
   return s.phase === "ended" && !!s.endsAt && takenAt <= s.endsAt && now <= s.endsAt + SUBMIT_GRACE_MS;
 }
 
-/** Players who've said they're done with this phase, and who's still going. */
+/** A round length in whole minutes, within range. Anything unreadable falls back to the default. */
+export function clampDuration(minutes: number): number {
+  if (!Number.isFinite(minutes)) return DEFAULT_SETTINGS.durationMinutes;
+  return Math.min(MAX_DURATION_MINUTES, Math.max(MIN_DURATION_MINUTES, Math.round(minutes)));
+}
+
+/** "15 min", "1 h", "1 h 30" */
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m}` : `${h} h`;
+}
+
+/**
+ * Players who've said they're done with this phase, and who's still going.
+ * The host isn't counted either way: they can't mark themselves done — moving
+ * everyone on is their "done".
+ */
 export function readiness(s: GameState): { ready: Player[]; waiting: Player[]; away: Player[] } {
   const gone = new Set(s.away ?? []);
-  const here = s.players.filter((p) => !gone.has(p.id));
+  const here = s.players.filter((p) => !gone.has(p.id) && p.id !== s.hostId);
   return {
     ready: here.filter((p) => s.ready[p.id]),
     waiting: here.filter((p) => !s.ready[p.id]),

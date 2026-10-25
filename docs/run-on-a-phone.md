@@ -99,7 +99,7 @@ npm run deploy
 npx wrangler secret put OPENAI_API_KEY --cwd server   # optional: enables AI-written quests
 ```
 
-`deploy` builds the web app, deploys it with the game server, and prints the address, like `https://side-quests.<your-subdomain>.workers.dev`. Check it with `curl <url>/api/health`. The DEV menu (bots, skip to end) is off in deployed builds and on in local development.
+`deploy` builds the web app, deploys it with the game server, and prints the address, like `https://side-quests.<your-subdomain>.workers.dev`. Check it with `curl <url>/api/health`. The DEV menu (bots, skip to end) is off in deployed builds, and locally only shows when the app is built with `EXPO_PUBLIC_DEV_MENU=1`.
 
 That address is also a permanent browser link: anyone can open it and play, no tunnel or laptop needed.
 

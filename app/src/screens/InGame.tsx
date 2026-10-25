@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
-import { serverUrl } from "../lib/config";
+import { DEV_MENU, serverUrl } from "../lib/config";
 import { useGame } from "../lib/session";
 import { DevMenu } from "../ui/DevMenu";
 import { fitBlock, fitLine } from "../ui/fit";
@@ -13,6 +13,7 @@ import { Avatar, Body, Button, Card, Display, Label, PaletteProvider, Screen, Se
 import { QuestMap } from "../ui/maps";
 import { PointsBadge } from "../ui/Points";
 import { ProofImage } from "../ui/Proof";
+import { LobbyCode } from "./Lobby";
 
 export function InGameScreen() {
   const { state, me, myQuest, mySkipsLeft, send, location } = useGame();
@@ -53,6 +54,7 @@ export function InGameScreen() {
   return (
     <Screen
       tone="signal"
+      left={<LobbyCode />}
       stripes={{ corner: "tr", color: color.paperBright, bands: [[0.04, 0.05], [0.13, 0.025]] }}
       title={
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -64,9 +66,12 @@ export function InGameScreen() {
       }
       right={
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
-          <Label size={11} bold color={color.paperBright}>
-            {done} done
-          </Label>
+          {/* On a pill so it reads over the corner stripe. */}
+          <View style={{ backgroundColor: color.deepRed, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 }}>
+            <Label size={11} bold color={color.paperBright} numberOfLines={1}>
+              {done} done
+            </Label>
+          </View>
           <DevMenu />
         </View>
       }
@@ -169,7 +174,8 @@ function Standings() {
           Live standings
         </Label>
       </SectionLabel>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.m, paddingVertical: 4 }} accessibilityLabel="Standings">
+      {/* Wraps into rows with a big group, inside the screen's own vertical scroll. */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: space.m, rowGap: space.m, paddingVertical: 4 }} accessibilityLabel="Standings">
         {rows.map(({ p, n }) => {
           const away = state.away?.includes(p.id);
           return (
@@ -191,7 +197,7 @@ function Standings() {
             </View>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -206,7 +212,10 @@ function Countdown({ width, compact }: { width: number; compact: boolean }) {
   const total = state.settings.durationMinutes * 60;
   const remaining = Math.max(0, Math.floor(((state.endsAt ?? 0) - (now + clockOffset)) / 1000));
   const urgent = remaining < 60;
-  const text = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
+  // Rounds can run for hours now: past an hour the clock reads H:MM:SS.
+  const two = (n: number) => String(n).padStart(2, "0");
+  const hours = Math.floor(remaining / 3600);
+  const text = hours ? `${hours}:${two(Math.floor(remaining / 60) % 60)}:${two(remaining % 60)}` : `${two(Math.floor(remaining / 60))}:${two(remaining % 60)}`;
 
   // A nudge you can feel at one minute and at ten seconds.
   const warned = useRef(new Set<number>());
@@ -220,7 +229,7 @@ function Countdown({ width, compact }: { width: number; compact: boolean }) {
   }, [remaining]);
 
   // Sized for the widest digits, so the clock doesn't jump as it counts.
-  const size = fitLine("00:00", width, compact ? 120 : 170);
+  const size = fitLine(hours ? `${hours}:00:00` : "00:00", width, compact ? 120 : 170);
   return (
     <View accessible accessibilityLabel={`${Math.floor(remaining / 60)} minutes ${remaining % 60} seconds left`} style={{ gap: space.s }}>
       <Display size={size} color={urgent ? color.inkBlack : color.paperBright} style={{ fontVariant: ["tabular-nums"] }}>
@@ -296,7 +305,8 @@ function QuestMapCard({ place, me }: { place: QuestPlace; me: Coordinate | null 
 type Picked = { uri: string; takenAt: number };
 
 /**
- * Camera or library → a preview to check → upload. In dev (and on simulators,
+ * Camera → a preview to check → upload. Proof has to be taken in the moment,
+ * so there's no picking from the photo library. In dev (and on simulators,
  * which have no camera) a generated stand-in is offered too.
  */
 function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onClose: () => void; onSubmitted: () => void }) {
@@ -313,14 +323,15 @@ function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onC
     onClose();
   };
 
-  const pick = async (from: "camera" | "library") => {
+  const devShots = DEV_MENU && state.devTools;
+
+  const takePhoto = async () => {
     setError(null);
     try {
-      const result =
-        from === "camera" ? await ImagePicker.launchCameraAsync({ quality: 0.8 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
       if (!result.canceled && result.assets?.[0]) setPicked({ uri: result.assets[0].uri, takenAt: Date.now() });
     } catch {
-      setError(from === "camera" ? "No camera here — choose from your library instead." : "Couldn't open your photos.");
+      setError("Couldn't open the camera. Check that Side Quests is allowed to use it.");
     }
   };
 
@@ -351,9 +362,8 @@ function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onC
             </>
           ) : (
             <>
-              <Button title="Take photo" icon="camera" onPress={() => pick("camera")} />
-              <Button title="Choose from library" kind="outline" icon="image" size="md" onPress={() => pick("library")} />
-              {state.devTools && (
+              <Button title="Take photo" icon="camera" onPress={() => void takePhoto()} />
+              {devShots && (
                 <Button
                   title="Use stand-in shot (dev)"
                   kind="quiet"
@@ -379,7 +389,7 @@ function CaptureSheet({ visible, onClose, onSubmitted }: { visible: boolean; onC
           <View style={{ flex: 1, minHeight: 160, borderRadius: radius.card, overflow: "hidden", borderWidth: 3, borderColor: picked ? color.signalRed : color.paperLine, backgroundColor: color.paperRaised }}>
             {picked ? (
               <Image source={{ uri: picked.uri }} style={{ flex: 1, opacity: uploading ? 0.5 : 1 }} resizeMode="contain" />
-            ) : state.devTools ? (
+            ) : devShots ? (
               <ProofImage proof={{ kind: "standin", seed: standinSeed }} quest={myQuest?.text ?? ""} by={me.name} large style={{ flex: 1 }} />
             ) : (
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: space.l, gap: space.s }}>

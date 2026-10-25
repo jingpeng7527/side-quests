@@ -1,6 +1,13 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
+/**
+ * Dev shortcuts (the DEV pill, "Add a bot", stand-in photos) are hidden unless
+ * the app is built with EXPO_PUBLIC_DEV_MENU=1 — and even then only appear when
+ * the server allows them (DEV_TOOLS). The ?demo= links work either way.
+ */
+export const DEV_MENU = process.env.EXPO_PUBLIC_DEV_MENU === "1";
+
 /** Ports the Expo dev server (Metro) uses for the web app during development. */
 const METRO_PORTS = new Set(["8081", "8082", "19006"]);
 

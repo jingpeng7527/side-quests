@@ -3,6 +3,7 @@ import type { DevOp } from "@side-quests/game";
 import { useState } from "react";
 import { Modal, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DEV_MENU } from "../lib/config";
 import { useSession } from "../lib/session";
 import { Hairline, Label, PaletteProvider, usePalette } from "./kit";
 import { color, radius, space } from "./theme";
@@ -16,7 +17,7 @@ export function DevMenu() {
   const pal = usePalette();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
-  if (!state?.devTools || !isHost) return null;
+  if (!DEV_MENU || !state?.devTools || !isHost) return null;
 
   const phase = state.phase;
   const items: [string, DevOp, boolean?][] = [

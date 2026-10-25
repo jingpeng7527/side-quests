@@ -138,6 +138,18 @@ describe("voting and scoring", () => {
   });
 });
 
+describe("round length", () => {
+  it("takes any whole number of minutes in range", () => {
+    const s = lobby();
+    const set = (m: number) => apply(s, { type: "updateSettings", settings: { ...s.settings, durationMinutes: m } }).settings.durationMinutes;
+    expect(set(47)).toBe(47);
+    expect(set(22.6)).toBe(23);
+    expect(set(0)).toBe(1);
+    expect(set(100_000)).toBe(12 * 60);
+    expect(set(Number.NaN)).toBe(s.settings.durationMinutes);
+  });
+});
+
 describe("the judging pool", () => {
   const cy: Player = { id: "cy", name: "Cy" };
   /** Four players, each with `each` proofs in, then judging starts. */
@@ -226,7 +238,8 @@ describe("moving between phases", () => {
     let s = apply(lobby(), { type: "setPhase", phase: "writing" });
     s = apply(s, { type: "setReady", playerId: "ana", ready: true });
     expect(readiness(s).ready.map((p) => p.id)).toEqual(["ana"]);
-    expect(readiness(s).waiting).toHaveLength(2);
+    // The host isn't counted: moving everyone on is their "done".
+    expect(readiness(s).waiting.map((p) => p.id)).toEqual(["bo"]);
     s = apply(s, { type: "setPhase", phase: "review" });
     expect(s.ready).toEqual({});
   });
@@ -234,7 +247,7 @@ describe("moving between phases", () => {
   it("doesn't wait on players whose phones dropped off", () => {
     let s = apply(lobby(), { type: "setPhase", phase: "writing" });
     s = apply(s, { type: "setAway", playerId: "bo", away: true });
-    expect(readiness(s).waiting.map((p) => p.id)).toEqual(["host", "ana"]);
+    expect(readiness(s).waiting.map((p) => p.id)).toEqual(["ana"]);
     expect(readiness(s).away.map((p) => p.id)).toEqual(["bo"]);
     expect(authorize(s, { type: "setAway", playerId: "ana", away: true }, "ana")).toBe(false);
     s = apply(s, { type: "setAway", playerId: "bo", away: false });

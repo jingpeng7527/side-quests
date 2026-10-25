@@ -11,6 +11,7 @@ import { Avatar, Body, Display, Hairline, Label, Screen, SectionLabel, Tag, colo
 import { RouteMap } from "../ui/maps";
 import { PointsBadge } from "../ui/Points";
 import { ProofImage } from "../ui/Proof";
+import { LobbyCode } from "./Lobby";
 
 export function EndGameScreen() {
   const { state, me, isHost } = useGame();
@@ -27,6 +28,7 @@ export function EndGameScreen() {
         </Label>
       }
       tone="signal"
+      left={<LobbyCode />}
       stripes={[{ corner: "tr", color: color.paperBright, bands: [[0.08, 0.06]] }, { corner: "bl", color: color.deepRed, bands: [[0.1, 0.12]] }]}
       right={<DevMenu />}
       footer={isHost ? <HostAdvance title="Judge the proofs" /> : <HostWaitingBar text="Waiting for {host} to start judging" />}
@@ -93,6 +95,7 @@ export function VerifyScreen() {
   return (
     <Screen
       title="Verify"
+      left={<LobbyCode />}
       stripes={{ corner: "br", color: color.signalRed, bands: [[0.03, 0.04], [0.11, 0.02]] }}
       right={<DevMenu />}
       footer={isHost ? <HostAdvance title="Final results" waitingVerb="judging" /> : <ReadyToggle label="Done judging" />}
@@ -315,6 +318,7 @@ export function ScoreboardScreen() {
   return (
     <Screen
       title="Final results"
+      left={<LobbyCode />}
       stripes={{ corner: "br", color: color.signalRed, bands: [[0.05, 0.05], [0.15, 0.025]] }}
       right={<DevMenu />}
       footer={

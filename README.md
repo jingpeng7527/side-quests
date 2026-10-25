@@ -105,6 +105,8 @@ cd app && npx expo lint
 
 The repeatable phone-browser check is documented in [docs/mobile-testing.md](docs/mobile-testing.md). The checkpoint continuation and verified results are in [docs/checkpoint-continuation.md](docs/checkpoint-continuation.md).
 
+**Dev shortcuts are hidden by default.** To show them, build or start the app with `EXPO_PUBLIC_DEV_MENU=1` (for example `EXPO_PUBLIC_DEV_MENU=1 npm run party`). The server must also allow them (`DEV_TOOLS=1`, the default locally). The `?demo=<phase>` links work either way.
+
 **Solo play:** in a lobby, tap **+ Add a bot**. Bots write quests, complete them with stand-in photos, and vote.
 
 **Dev shortcuts** (server runs with `DEV_TOOLS=1`, host only): tap the black **DEV** tag in the header of any game screen to skip to the end, have everyone complete a quest, add time, deal yourself a quest with a place, or jump to verification or the scoreboard.

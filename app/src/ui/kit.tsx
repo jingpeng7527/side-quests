@@ -1,5 +1,5 @@
 import Feather from "@expo/vector-icons/Feather";
-import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import { createContext, isValidElement, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import { Animated, Pressable, StyleSheet, Switch, Text, View, type TextProps, type TextStyle, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { fitLine } from "./fit";
@@ -117,7 +117,8 @@ export function Screen({
 }: {
   title?: ReactNode;
   tone?: Tone;
-  left?: { icon: IconName; onPress: () => void; label: string };
+  /** A back/close button, or any small element (the lobby code) for the corner. */
+  left?: { icon: IconName; onPress: () => void; label: string } | ReactNode;
   right?: ReactNode;
   stripes?: StripesProps | StripesProps[];
   footer?: ReactNode;
@@ -133,7 +134,7 @@ export function Screen({
         ))}
         <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
           <View style={styles.header}>
-            <View style={styles.headerSide}>{left ? <IconButton {...left} /> : null}</View>
+            <View style={styles.headerSide}>{isValidElement(left) ? left : left && typeof left === "object" && "icon" in left ? <IconButton {...left} /> : null}</View>
             <View style={{ flex: 1, alignItems: "center" }}>
               {typeof title === "string" ? (
                 <Label size={14} bold color={pal.fg} numberOfLines={1}>

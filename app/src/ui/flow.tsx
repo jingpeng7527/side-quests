@@ -174,15 +174,13 @@ export function ConfirmSheet({
  * While a move is pending it says so instead of double-firing.
  */
 export function HostAdvance({ title, disabled, waitingVerb, icon }: { title: string; disabled?: boolean; waitingVerb?: string; icon?: IconName }) {
-  const { state, send, me } = useGame();
+  const { state, send } = useGame();
   const [confirming, setConfirming] = useState(false);
   const to = NEXT_PHASE[state.phase];
-  const { waiting, ready } = readiness(state);
-  // The host moving on is the host's own "ready". Players who've dropped off don't count.
-  const others = waiting.filter((p) => p.id !== me.id);
+  // Readiness leaves out the host (moving on is their "done") and anyone who's dropped off.
+  const { waiting: others, ready } = readiness(state);
   const tracksReady = !!waitingVerb;
-  // Count everyone but the host — the host moving on is their own "done".
-  const total = waiting.length + ready.length - 1;
+  const total = others.length + ready.length;
   const go = () => {
     setConfirming(false);
     if (to) send({ type: "requestPhase", phase: to });
@@ -192,7 +190,7 @@ export function HostAdvance({ title, disabled, waitingVerb, icon }: { title: str
   return (
     <>
       <Button title={title} icon={icon} arrow={!icon} disabled={disabled || !to} onPress={() => (tracksReady && others.length ? setConfirming(true) : go())} />
-      {tracksReady && (
+      {tracksReady && total > 0 && (
         <Label size={10} style={{ textAlign: "center" }}>
           {total - others.length} of {total} {total === 1 ? "player" : "players"} done {waitingVerb}
         </Label>

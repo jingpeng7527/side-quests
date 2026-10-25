@@ -100,12 +100,12 @@ export function HomeScreen() {
       }
     >
       <View style={{ flex: 1, justifyContent: "space-between" }}>
-        {/* Wordmark: huge, slanted, tilted, bleeding off the left edge. */}
-        <View style={{ marginTop: space.m, marginLeft: -w * 0.04, transform: [{ rotate: "-8deg" }] }}>
-          <Display size={200} fit={w * 0.78}>
+        {/* Wordmark: huge, slanted and tilted. Inset from the left so the slant and tilt don't clip the S. */}
+        <View style={{ marginTop: space.m, marginLeft: space.gutter, transform: [{ rotate: "-8deg" }] }}>
+          <Display size={200} fit={w * 0.72}>
             Side
           </Display>
-          <Display size={200} fit={w * 1.02} style={{ marginTop: -w * 0.07 }}>
+          <Display size={200} fit={w * 0.94} style={{ marginTop: -w * 0.065 }}>
             Quests
           </Display>
         </View>
@@ -117,9 +117,12 @@ export function HomeScreen() {
           style={{ position: "absolute", right: space.gutter, top: space.m }}
         />
         <View style={{ gap: space.s, paddingHorizontal: space.gutter, marginBottom: space.s }}>
-          <Label size={12} bold color={color.paperBright}>
-            {needName && !name ? "Add your name first" : "Your name"}
-          </Label>
+          {/* The field speaks for itself; only nudge when it's needed. */}
+          {needName && !name && (
+            <Label size={12} bold color={color.paperBright}>
+              Add your name first
+            </Label>
+          )}
           <NameField inputRef={input} value={draft ?? me.name} onChange={setDraft} shake={x} />
         </View>
       </View>

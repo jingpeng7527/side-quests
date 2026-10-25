@@ -1,5 +1,5 @@
 import Feather from "@expo/vector-icons/Feather";
-import { PLACE_RADIUS_OPTIONS, distance, formatDistance, readiness, type Coordinate, type GameState, type Quest, type QuestPlace } from "@side-quests/game";
+import { PLACE_RADIUS_OPTIONS, distance, formatDistance, formatDuration, readiness, type Coordinate, type GameState, type Quest, type QuestPlace } from "@side-quests/game";
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from "react-native";
@@ -10,7 +10,7 @@ import { HostAdvance, HostWaitingBar, ReadyToggle } from "../ui/flow";
 import { Avatar, Body, Button, Card, Display, IconButton, Label, Screen, SectionLabel, Tag, color, font, radius, space, usePalette } from "../ui/kit";
 import { PickerMap } from "../ui/maps";
 import { DifficultyMeter, PointsStepper, RatingLine } from "../ui/Points";
-import { GameSettingsSheet } from "./Lobby";
+import { GameSettingsSheet, LobbyCode } from "./Lobby";
 
 const MAX_QUEST = 100;
 
@@ -107,6 +107,7 @@ export function QuestsScreen() {
   return (
     <Screen
       title="Write quests"
+      left={<LobbyCode />}
       right={
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <DevMenu />
@@ -478,14 +479,30 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
 export function ReviewScreen() {
   const { state, me, isHost, send } = useGame();
   const [adding, setAdding] = useState("");
+  const [addingPlace, setAddingPlace] = useState<QuestPlace | undefined>();
+  const [picking, setPicking] = useState(false);
+  const [editing, setEditing] = useState(false);
   const included = state.quests.filter((q) => q.included).length;
   const scoring = state.settings.difficultyScoring !== false;
+
+  const addQuest = () => {
+    const text = adding.trim();
+    if (text) send({ type: "addQuest", quest: { id: newId(), text, place: addingPlace, authorId: me.id, source: "human", included: true } });
+    setAdding("");
+    setAddingPlace(undefined);
+  };
 
   return (
     <Screen
       title="Review deck"
-      right={<DevMenu />}
-      footer={isHost ? <HostAdvance title={`Deal · ${state.settings.durationMinutes}:00`} icon="play" disabled={!included} /> : <HostWaitingBar text="{host} is reviewing the deck" />}
+      left={<LobbyCode />}
+      right={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <DevMenu />
+          {isHost && <IconButton icon="sliders" label="Game settings" onPress={() => setEditing(true)} />}
+        </View>
+      }
+      footer={isHost ? <HostAdvance title={`Deal · ${formatDuration(state.settings.durationMinutes)}`} icon="play" disabled={!included} /> : <HostWaitingBar text="{host} is reviewing the deck" />}
     >
       {isHost ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: space.l, gap: space.s }}>
@@ -541,20 +558,32 @@ export function ReviewScreen() {
               <Label size={11}>{state.aiMode === "ai" ? "AI is writing in your vibe…" : "Dealing from the offline deck…"}</Label>
             </View>
           )}
-          <Card style={{ flexDirection: "row", alignItems: "center", gap: space.s, paddingVertical: 6 }}>
-            <TextInput
-              value={adding}
-              onChangeText={setAdding}
-              placeholder="Add another quest…"
-              placeholderTextColor={color.stone}
-              accessibilityLabel="Add another quest"
-              onSubmitEditing={() => {
-                if (adding.trim()) send({ type: "addQuest", quest: { id: newId(), text: adding.trim(), authorId: me.id, source: "human", included: true } });
-                setAdding("");
-              }}
-              style={{ flex: 1, fontFamily: font.body, fontSize: 16, color: color.inkBlack, paddingVertical: 10 }}
-            />
-            <Feather name="corner-down-left" size={18} color={color.stone} />
+          <Card style={{ gap: space.s, paddingVertical: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
+              <TextInput
+                value={adding}
+                onChangeText={(t) => setAdding(t.slice(0, MAX_QUEST))}
+                maxLength={MAX_QUEST}
+                placeholder="Add another quest…"
+                placeholderTextColor={color.stone}
+                accessibilityLabel="Add another quest"
+                onSubmitEditing={addQuest}
+                style={{ flex: 1, fontFamily: font.body, fontSize: 16, color: color.inkBlack, paddingVertical: 10 }}
+              />
+              <IconButton icon="corner-down-left" label="Add quest" onPress={addQuest} />
+            </View>
+            {addingPlace ? (
+              <View style={{ paddingBottom: space.s }}>
+                <PlaceChip place={addingPlace} onRemove={() => setAddingPlace(undefined)} />
+              </View>
+            ) : (
+              <Pressable onPress={() => setPicking(true)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingBottom: space.s, alignSelf: "flex-start" }}>
+                <Feather name="map-pin" size={15} color={color.signalRed} />
+                <Label size={11} bold color={color.signalRed}>
+                  Add a place
+                </Label>
+              </Pressable>
+            )}
           </Card>
         </ScrollView>
       ) : (
@@ -566,6 +595,14 @@ export function ReviewScreen() {
           <Body color={color.stone}>The host is giving it a once-over. Get your shoes on.</Body>
         </View>
       )}
+      <GameSettingsSheet visible={editing} onClose={() => setEditing(false)} />
+      <PlacePicker
+        visible={picking}
+        onDone={(p) => {
+          if (p) setAddingPlace(p);
+          setPicking(false);
+        }}
+      />
     </Screen>
   );
 }

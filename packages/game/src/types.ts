@@ -72,7 +72,10 @@ export interface GameSettings {
   difficultyScoring: boolean;
 }
 
-export const DURATION_OPTIONS = [2, 5, 10, 15, 30, 60] as const;
+/** Quick picks for the round length; any whole number of minutes in range works. */
+export const DURATION_OPTIONS = [5, 10, 15, 30, 60, 90] as const;
+export const MIN_DURATION_MINUTES = 1;
+export const MAX_DURATION_MINUTES = 12 * 60;
 
 /** How many players judge each proof. The pool of proofs is split evenly across everyone else. */
 export const JUDGES_PER_PROOF = 1;

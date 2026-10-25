@@ -1,14 +1,14 @@
 import Feather from "@expo/vector-icons/Feather";
-import { DURATION_OPTIONS, type GameSettings, type GameState, type Player } from "@side-quests/game";
-import { useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from "react-native";
+import { DURATION_OPTIONS, MAX_DURATION_MINUTES, clampDuration, formatDuration, type GameSettings, type GameState, type Player } from "@side-quests/game";
+import { useEffect, useState } from "react";
+import { Modal, Platform, Pressable, ScrollView, Share, TextInput, View, useWindowDimensions } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import { joinUrl } from "../lib/config";
+import { DEV_MENU, joinUrl } from "../lib/config";
 import { useGame } from "../lib/session";
 import { Annotation } from "../ui/Annotation";
 import { DevMenu } from "../ui/DevMenu";
 import { ConfirmSheet, HostAdvance, HostWaitingBar, useToast } from "../ui/flow";
-import { Avatar, Body, Button, Display, Hairline, Label, Screen, SectionLabel, SwitchRow, Tag, color, radius, space, usePalette } from "../ui/kit";
+import { Avatar, Body, Button, Display, Hairline, Label, Screen, SectionLabel, SwitchRow, Tag, color, font, radius, space, usePalette } from "../ui/kit";
 
 export function LobbyScreen() {
   const { state, isHost, me, dev, leave } = useGame();
@@ -48,9 +48,6 @@ export function LobbyScreen() {
             </View>
             <Annotation lines={["Scan", "to join"]} color={color.signalRed} size={18} rotate={-12} arrow="down-left" style={{ position: "absolute", left: w / 2 + Math.min(140, w * 0.42) / 2 + 16 }} />
           </View>
-          <Body size={13} color={color.stone} style={{ textAlign: "center", maxWidth: 320 }}>
-            Phone camera → tap the link. It opens in the browser — no app, no account.
-          </Body>
         </View>
 
         <View style={{ gap: space.s }}>
@@ -64,7 +61,7 @@ export function LobbyScreen() {
               <Hairline />
             </View>
           ))}
-          {isHost && state.devTools && (
+          {isHost && DEV_MENU && state.devTools && (
             <Pressable onPress={() => dev({ op: "addBot" })} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingVertical: space.s }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: color.signalRed, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="plus" size={20} color={color.signalRed} />
@@ -116,7 +113,7 @@ export function PlayerRow({ player, state, isMe, trailing }: { player: Player; s
 export function SettingsSummary({ settings, editable, onEdit }: { settings: GameSettings; editable: boolean; onEdit: () => void }) {
   const pal = usePalette();
   const summary = [
-    `${settings.durationMinutes} min`,
+    formatDuration(settings.durationMinutes),
     settings.allowSkips ? `${settings.maxSkips} skips` : "no skips",
     settings.difficultyScoring !== false ? "1–5 pts" : "1 pt each",
     settings.aiRefill ? "AI on" : "AI off",
@@ -152,7 +149,8 @@ export function GameSettingsSheet({ visible, onClose }: { visible: boolean; onCl
       <Screen title="Game settings" left={{ icon: "x", onPress: onClose, label: "Close" }} footer={<Button title="Done" onPress={onClose} />}>
         <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, gap: space.l, paddingBottom: space.l }}>
           <View style={{ gap: space.s }}>
-            <SectionLabel>Time (minutes)</SectionLabel>
+            <SectionLabel>Round length</SectionLabel>
+            <DurationField minutes={s.durationMinutes} onChange={(m) => update({ durationMinutes: m })} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.s }}>
               {DURATION_OPTIONS.map((m) => (
                 <Pressable
@@ -160,9 +158,10 @@ export function GameSettingsSheet({ visible, onClose }: { visible: boolean; onCl
                   onPress={() => update({ durationMinutes: m })}
                   accessibilityRole="button"
                   accessibilityState={{ selected: s.durationMinutes === m }}
+                  accessibilityLabel={formatDuration(m)}
                   style={{
                     minWidth: 64,
-                    minHeight: 48,
+                    minHeight: 44,
                     paddingHorizontal: space.m,
                     alignItems: "center",
                     justifyContent: "center",
@@ -172,8 +171,8 @@ export function GameSettingsSheet({ visible, onClose }: { visible: boolean; onCl
                     borderColor: s.durationMinutes === m ? color.signalRed : color.paperLine,
                   }}
                 >
-                  <Display size={24} color={s.durationMinutes === m ? color.paperBright : color.inkBlack}>
-                    {String(m)}
+                  <Display size={22} color={s.durationMinutes === m ? color.paperBright : color.inkBlack}>
+                    {formatDuration(m)}
                   </Display>
                 </Pressable>
               ))}
@@ -193,6 +192,84 @@ export function GameSettingsSheet({ visible, onClose }: { visible: boolean; onCl
         </ScrollView>
       </Screen>
     </Modal>
+  );
+}
+
+/** Type any number of minutes; the quick picks below fill it in. Commits on blur or return. */
+function DurationField({ minutes, onChange }: { minutes: number; onChange: (m: number) => void }) {
+  const [text, setText] = useState(String(minutes));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setText(String(minutes));
+  }, [minutes, focused]);
+  const commit = () => {
+    setFocused(false);
+    const n = parseInt(text, 10);
+    if (Number.isFinite(n)) {
+      const m = clampDuration(n);
+      setText(String(m));
+      if (m !== minutes) onChange(m);
+    } else setText(String(minutes));
+  };
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: space.m }}>
+      <TextInput
+        value={text}
+        onChangeText={(t) => setText(t.replace(/[^0-9]/g, "").slice(0, 3))}
+        onFocus={() => setFocused(true)}
+        onBlur={commit}
+        onSubmitEditing={commit}
+        keyboardType="number-pad"
+        returnKeyType="done"
+        selectTextOnFocus
+        accessibilityLabel="Round length in minutes"
+        style={{
+          width: 120,
+          fontFamily: font.display,
+          fontSize: 44,
+          color: color.signalRed,
+          backgroundColor: color.paperBright,
+          borderRadius: radius.field,
+          borderWidth: 2,
+          borderColor: focused ? color.signalRed : color.paperLine,
+          paddingHorizontal: space.m,
+          paddingVertical: 4,
+          textAlign: "center",
+        }}
+      />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Body medium>minutes</Body>
+        <Label size={10}>{`Any length, up to ${MAX_DURATION_MINUTES / 60} hours`}</Label>
+      </View>
+    </View>
+  );
+}
+
+/** The lobby code, small, in the corner of every game screen — so a lost player can find their way back. Tap to share the invite. */
+export function LobbyCode() {
+  const { state } = useGame();
+  const pal = usePalette();
+  // Where there's no share sheet the link is copied; say so in the tag itself for a moment.
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 1600);
+    return () => clearTimeout(t);
+  }, [note]);
+  return (
+    <>
+      <Pressable
+        onPress={() => void invite(state.code, (m) => setNote(m === "Invite link copied" ? "Copied" : null))}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Lobby code ${state.code.split("").join(" ")}. Share the invite`}
+        style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, borderWidth: 1.5, borderColor: pal.line }}
+      >
+        <Label size={11} bold color={pal.fg} style={{ letterSpacing: 2 }}>
+          {note ?? state.code}
+        </Label>
+      </Pressable>
+    </>
   );
 }
 
