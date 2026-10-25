@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptingProofs, apply, authorize, claimedPoints, freshQuestCount, newGame, nextHost, pointsFor, ranking, readiness } from "./engine";
+import { acceptingProofs, apply, authorize, claimedPoints, freshQuestCount, hostAfterGrace, hostAfterLeave, newGame, nextHost, pointsFor, ranking, readiness } from "./engine";
 import { DEFAULT_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS, type GameState, type Player, type Quest, type QuestDifficulty, type Submission } from "./types";
 
 const host: Player = { id: "host", name: "Ryan" };
@@ -184,6 +184,44 @@ describe("the buzzer", () => {
 });
 
 describe("host handoff", () => {
+  it("immediately selects a connected successor when the host leaves", () => {
+    let s = apply(lobby(), { type: "leave", playerId: "host" });
+    const heir = hostAfterLeave(s, "host", new Set(["ana", "offline"]));
+    expect(heir?.id).toBe("ana");
+    s = apply(s, { type: "setHost", playerId: heir!.id });
+    expect(s.hostId).toBe("ana");
+    expect(s.players.some((p) => p.id === "host")).toBe(false);
+    expect(authorize(s, { type: "requestPhase", phase: "writing" }, "ana")).toBe(true);
+    expect(authorize(s, { type: "requestPhase", phase: "writing" }, "host")).toBe(false);
+  });
+
+  it("uses the grace-period callback only for the same host while they're still away", () => {
+    let s = apply(lobby(), { type: "setAway", playerId: "host", away: true });
+    expect(hostAfterGrace(s, "host", new Set(["ana", "bo"]))?.id).toBe("ana");
+    expect(hostAfterGrace(s, "host", new Set())).toBeUndefined();
+    s = apply(s, { type: "setAway", playerId: "host", away: false });
+    expect(hostAfterGrace(s, "host", new Set(["ana", "bo"]))).toBeUndefined();
+    s = apply(s, { type: "setAway", playerId: "host", away: true });
+    s = apply(s, { type: "setHost", playerId: "ana" });
+    expect(hostAfterGrace(s, "host", new Set(["bo"]))).toBeUndefined();
+  });
+
+  it("preserves game state and grants host controls in every phase", () => {
+    for (const phase of ["lobby", "writing", "review", "playing", "ended", "verifying", "scoreboard"] as const) {
+      let s: GameState = { ...lobby([quest("h1", "host"), quest("a1", "ana"), quest("b1", "bo")]), phase, endsAt: 1234 };
+      s = { ...s, submissions: [proof("h1", "host", "saved")] };
+      s = apply(s, { type: "leave", playerId: "host" });
+      expect(hostAfterLeave(s, "host", new Set(["ana", "bo"]))?.id).toBe("ana");
+      s = apply(s, { type: "setHost", playerId: "ana" });
+      expect(s.hostId).toBe("ana");
+      expect(s.endsAt).toBe(1234);
+      expect(s.quests.map((q) => q.id)).toEqual(["h1", "a1", "b1"]);
+      expect(s.submissions.map((sub) => sub.id)).toEqual(["saved"]);
+      expect(authorize(s, { type: "requestPhase", phase: "writing" }, "ana")).toBe(true);
+      expect(authorize(s, { type: "requestPhase", phase: "writing" }, "host")).toBe(false);
+    }
+  });
+
   it("passes hosting to the first human who's still here", () => {
     let s = lobby();
     s = apply(s, { type: "join", player: { id: "bot", name: "Juno", isBot: true } });
@@ -193,7 +231,7 @@ describe("host handoff", () => {
     s = apply(s, { type: "requestPhase", phase: "writing" });
     s = apply(s, { type: "setHost", playerId: "bo" });
     expect(s.hostId).toBe("bo");
-    expect(s.transition).toBeUndefined();
+    expect(s.transition?.to).toBe("writing");
     expect(authorize(s, { type: "requestPhase", phase: "writing" }, "bo")).toBe(true);
     expect(authorize(s, { type: "requestPhase", phase: "writing" }, "host")).toBe(false);
   });

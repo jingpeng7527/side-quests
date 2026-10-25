@@ -136,8 +136,6 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
     case "setHost":
       if (s.hostId === action.playerId || !s.players.some((p) => p.id === action.playerId)) return prev;
       s.hostId = action.playerId;
-      // A move the old host asked for shouldn't land on the new host's watch.
-      delete s.transition;
       return s;
 
     case "setAway": {
@@ -265,9 +263,21 @@ export function nextPlayerName(s: GameState): string {
 }
 
 /** Who should take over hosting: the first human player who's still here. */
-export function nextHost(s: GameState): Player | undefined {
+export function nextHost(s: GameState, connected?: ReadonlySet<ID>): Player | undefined {
   const away = new Set(s.away ?? []);
-  return s.players.find((p) => p.id !== s.hostId && !p.isBot && !away.has(p.id));
+  return s.players.find((p) => p.id !== s.hostId && !p.isBot && !away.has(p.id) && (!connected || connected.has(p.id)));
+}
+
+/** Select a connected successor when the current host explicitly leaves. */
+export function hostAfterLeave(s: GameState, leavingHostId: ID, connected: ReadonlySet<ID>): Player | undefined {
+  if (s.hostId !== leavingHostId) return undefined;
+  return nextHost(s, connected);
+}
+
+/** Resolve a delayed handoff only if the same host is still away. */
+export function hostAfterGrace(s: GameState, expectedHostId: ID, connected: ReadonlySet<ID>): Player | undefined {
+  if (s.hostId !== expectedHostId || !(s.away ?? []).includes(expectedHostId)) return undefined;
+  return nextHost(s, connected);
 }
 
 /** What the host's "move on" button leads to from each phase. */
