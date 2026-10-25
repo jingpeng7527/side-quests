@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptingProofs, apply, authorize, claimedPoints, freshQuestCount, hostAfterGrace, hostAfterLeave, newGame, nextHost, pointsFor, ranking, readiness } from "./engine";
+import { acceptingProofs, apply, authorize, averageRating, canJudge, claimedPoints, freshQuestCount, hostAfterGrace, hostAfterLeave, newGame, nextHost, pointsFor, proofsToJudge, ranking, readiness } from "./engine";
 import { DEFAULT_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS, type GameState, type Player, type Quest, type QuestDifficulty, type Submission } from "./types";
 
 const host: Player = { id: "host", name: "Ryan" };
@@ -76,7 +76,7 @@ describe("dealing", () => {
   it("counts fresh quests for AI top-ups", () => {
     const s = apply(lobby([quest("h1", "host"), quest("a1", "ana"), quest("b1", "bo"), quest("x", "ana")]), {
       type: "startGame",
-    });
+    }, 0, () => 0); // Fixed dealing: a random deal can double up a quest and leave two fresh.
     expect(freshQuestCount(s)).toBe(1);
   });
 });
@@ -135,6 +135,78 @@ describe("voting and scoring", () => {
     // An unrated quest is worth DEFAULT_POINTS.
     expect(r[0]).toMatchObject({ player: { id: "ana" }, score: DEFAULT_POINTS, verified: 1 });
     expect(r.find((x) => x.player.id === "bo")!.score).toBe(0);
+  });
+});
+
+describe("the judging pool", () => {
+  const cy: Player = { id: "cy", name: "Cy" };
+  /** Four players, each with `each` proofs in, then judging starts. */
+  function judging(each: number, rand?: () => number): GameState {
+    let s = lobby();
+    s = apply(s, { type: "join", player: cy });
+    const ids = ["host", "ana", "bo", "cy"];
+    s = { ...s, phase: "ended", submissions: ids.flatMap((id) => Array.from({ length: each }, (_, i) => ({ ...proof(`q${i}`, id), ratings: {} }))) };
+    return apply(s, { type: "setPhase", phase: "verifying" }, Date.now(), rand);
+  }
+
+  it("splits every proof evenly-ish and never to its author", () => {
+    for (let i = 0; i < 30; i++) {
+      const s = judging(3);
+      for (const sub of s.submissions) {
+        expect(s.judges![sub.id]).toHaveLength(1);
+        expect(s.judges![sub.id]).not.toContain(sub.playerId);
+      }
+      const loads = s.players.map((p) => proofsToJudge(s, p.id).length);
+      expect(loads.reduce((a, b) => a + b, 0)).toBe(12);
+      expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("only takes votes and ratings from a proof's judge", () => {
+    let s = judging(1);
+    const sub = s.submissions[0];
+    const judge = s.judges![sub.id][0];
+    const bystander = s.players.find((p) => p.id !== judge && p.id !== sub.playerId)!.id;
+    expect(apply(s, { type: "vote", submissionId: sub.id, voterId: bystander, approve: false })).toBe(s);
+    expect(apply(s, { type: "rateProof", submissionId: sub.id, raterId: bystander, stars: 5 })).toBe(s);
+    s = apply(s, { type: "vote", submissionId: sub.id, voterId: judge, approve: true });
+    s = apply(s, { type: "rateProof", submissionId: sub.id, raterId: judge, stars: 4 });
+    expect(s.submissions[0].votes[judge]).toBe(true);
+    expect(s.submissions[0].ratings![judge]).toBe(4);
+  });
+
+  it("keeps star ratings optional, whole and in range", () => {
+    let s = judging(1);
+    const sub = s.submissions[0];
+    const judge = s.judges![sub.id][0];
+    expect(averageRating(s.submissions)).toBeNull();
+    expect(apply(s, { type: "rateProof", submissionId: sub.id, raterId: judge, stars: 9 })).toBe(s);
+    expect(apply(s, { type: "rateProof", submissionId: sub.id, raterId: judge, stars: 0 })).toBe(s);
+    s = apply(s, { type: "rateProof", submissionId: sub.id, raterId: judge, stars: 3 });
+    expect(averageRating(s.submissions)).toEqual({ average: 3, count: 1 });
+    s = apply(s, { type: "rateProof", submissionId: sub.id, raterId: judge, stars: null });
+    expect(averageRating(s.submissions)).toBeNull();
+  });
+
+  it("hands someone's unjudged proofs on when they leave", () => {
+    let s = judging(2);
+    const leaving = "bo";
+    const theirs = proofsToJudge(s, leaving);
+    expect(theirs.length).toBeGreaterThan(0);
+    s = apply(s, { type: "leave", playerId: leaving });
+    expect(proofsToJudge(s, leaving)).toHaveLength(0);
+    for (const sub of theirs) {
+      const now = s.judges![sub.id];
+      expect(now).toHaveLength(1);
+      expect(now).not.toContain(sub.playerId);
+      expect(now).not.toContain(leaving);
+    }
+  });
+
+  it("lets anyone but the author judge before judging is dealt", () => {
+    const s = { ...lobby(), submissions: [proof("q", "ana")] };
+    expect(canJudge(s, s.submissions[0], "bo")).toBe(true);
+    expect(canJudge(s, s.submissions[0], "ana")).toBe(false);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   LOBBY_TTL_MS,
   apply,
   authorize,
+  canJudge,
   demoPlace,
   distance,
   freshQuestCount,
@@ -42,6 +43,9 @@ export interface Env {
   CATALOG?: D1Database;
 }
 
+/** How old a phone's last reported position can be and still stand in for a proof's location. */
+const LOCATION_FRESH_MS = 5 * 60_000;
+
 /**
  * One lobby = one Durable Object. It owns the authoritative game state,
  * applies every action through the shared rules, persists, and broadcasts
@@ -51,6 +55,8 @@ export class Lobby extends DurableObject<Env> {
   state: GameState | null = null;
   /** Last known position of the host — anchors bot photos and demo places. */
   hostLocation?: Coordinate;
+  /** Each player's last reported position, for proofs that arrive without one. */
+  private lastLocation = new Map<string, { at: number; location: Coordinate }>();
   private sockets = new Map<WebSocket, string>();
   /** When anything last happened here; the lobby is deleted LOBBY_TTL_MS after. */
   private lastActivity = Date.now();
@@ -202,7 +208,7 @@ export class Lobby extends DurableObject<Env> {
         return;
       case "action":
         if (!playerId) return this.send(ws, { type: "error", message: "say hello first" });
-        this.dispatch(msg.action, playerId, ws);
+        this.dispatch(this.withLocation(msg.action, playerId), playerId, ws);
         return;
       case "dev":
         // Dev shortcuts end games and add bots — host only, so a player can't yank everyone along.
@@ -222,6 +228,28 @@ export class Lobby extends DurableObject<Env> {
 
   private noteLocation(playerId: string, location: Coordinate) {
     if (playerId === this.state?.hostId) this.hostLocation = location;
+    this.lastLocation.set(playerId, { at: Date.now(), location });
+  }
+
+  /**
+   * Phones don't always get a fresh fix while the camera is open (iOS pauses
+   * location updates for a backgrounded page or app), so a proof can arrive
+   * with no location. Fill it in from the last position that phone reported, if
+   * it's recent, so the proof still lands on the end-of-game route map.
+   */
+  private withLocation(action: Action, playerId: string): Action {
+    if (action.type !== "submit" || action.submission.location || action.submission.playerId !== playerId) return action;
+    const last = this.lastLocation.get(playerId);
+    if (!last || Date.now() - last.at > LOCATION_FRESH_MS) return action;
+    const quest = this.state?.quests.find((q) => q.id === action.submission.questId);
+    return {
+      ...action,
+      submission: {
+        ...action.submission,
+        location: last.location,
+        distanceFromPlace: quest?.place ? distance(last.location, quest.place.coordinate) : undefined,
+      },
+    };
   }
 
   /** Applies an action through the shared rules, then persists, broadcasts and runs host duties. */
@@ -491,7 +519,7 @@ export class Lobby extends DurableObject<Env> {
     const s = this.state!;
     for (const sub of s.submissions) {
       for (const p of s.players) {
-        if (p.isBot && p.id !== sub.playerId && sub.votes[p.id] === undefined) {
+        if (p.isBot && canJudge(s, sub, p.id) && sub.votes[p.id] === undefined) {
           this.dispatch({ type: "vote", submissionId: sub.id, voterId: p.id, approve: Math.random() < 0.8 }, "server");
         }
       }

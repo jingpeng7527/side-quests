@@ -1,4 +1,4 @@
-import { isVerified, type GameState } from "@side-quests/game";
+import { averageRating, isVerified, type GameState } from "@side-quests/game";
 
 /** A quest pulled from a finished game, for LLM inspiration or later curation. */
 export interface CatalogEntry {
@@ -7,6 +7,8 @@ export interface CatalogEntry {
   verified: boolean;
   place: { name: string; radius: number } | null;
   playedAt: number;
+  /** Mean of the optional 1–5 star ratings judges gave it, or null if nobody rated it. */
+  rating: number | null;
 }
 
 interface CatalogRow {
@@ -16,6 +18,7 @@ interface CatalogRow {
   place_radius: number | null;
   played_at: number;
   times_verified: number;
+  rating: number | null;
 }
 
 /**
@@ -32,10 +35,11 @@ export async function saveToCatalog(db: D1Database | undefined, state: GameState
       if (q.source !== "human") return null;
       const subs = state.submissions.filter((s) => s.questId === q.id);
       if (!subs.length) return null;
+      const rated = averageRating(subs);
       return db
         .prepare(
-          `INSERT INTO catalog_quests (id, text, source, place_name, place_lat, place_lng, place_radius, lobby_code, played_at, times_submitted, times_verified)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)
+          `INSERT INTO catalog_quests (id, text, source, place_name, place_lat, place_lng, place_radius, lobby_code, played_at, times_submitted, times_verified, rating, rating_count)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO NOTHING`,
         )
         .bind(
@@ -50,6 +54,8 @@ export async function saveToCatalog(db: D1Database | undefined, state: GameState
           playedAt,
           subs.length,
           subs.filter(isVerified).length,
+          rated?.average ?? null,
+          rated?.count ?? 0,
         );
     })
     .filter((s): s is NonNullable<typeof s> => !!s);
@@ -65,7 +71,7 @@ export async function listCatalog(
   const where = opts.verifiedOnly ? "WHERE times_verified > 0" : "";
   const order = opts.random ? "ORDER BY RANDOM()" : "ORDER BY played_at DESC";
   const { results } = await db
-    .prepare(`SELECT text, source, place_name, place_radius, played_at, times_verified FROM catalog_quests ${where} ${order} LIMIT ?`)
+    .prepare(`SELECT text, source, place_name, place_radius, played_at, times_verified, rating FROM catalog_quests ${where} ${order} LIMIT ?`)
     .bind(opts.limit)
     .all<CatalogRow>();
   return results.map((r) => ({
@@ -74,5 +80,6 @@ export async function listCatalog(
     verified: r.times_verified > 0,
     place: r.place_name ? { name: r.place_name, radius: r.place_radius ?? 0 } : null,
     playedAt: r.played_at,
+    rating: r.rating,
   }));
 }

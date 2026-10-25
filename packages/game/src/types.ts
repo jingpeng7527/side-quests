@@ -74,6 +74,10 @@ export interface GameSettings {
 
 export const DURATION_OPTIONS = [2, 5, 10, 15, 30, 60] as const;
 
+/** How many players judge each proof. The pool of proofs is split evenly across everyone else. */
+export const JUDGES_PER_PROOF = 1;
+export const MAX_STARS = 5;
+
 /** How long everyone sees "moving on in…" before a host-requested phase change lands. */
 export const TRANSITION_MS = 3_000;
 
@@ -110,6 +114,8 @@ export interface Submission {
   distanceFromPlace?: number;
   /** voterId -> approved */
   votes: Record<ID, boolean>;
+  /** raterId -> 1–5 stars for the quest itself. Optional: most judges won't bother. */
+  ratings?: Record<ID, number>;
 }
 
 export type Phase = "lobby" | "writing" | "review" | "playing" | "ended" | "verifying" | "scoreboard";
@@ -135,6 +141,8 @@ export interface GameState {
   away: ID[];
   /** Who's said they're done with the current phase (writing, judging). Reset on every phase change. */
   ready: Record<ID, boolean>;
+  /** submissionId -> who judges it. Dealt when verifying starts; absent before (anyone but the author may judge). */
+  judges?: Record<ID, ID[]>;
   /** A host-requested phase change, announced to everyone a few seconds before it happens. */
   transition?: { to: Phase; at: number };
   /** Whether quest generation is backed by an AI model or the offline deck. */
@@ -163,4 +171,5 @@ export type Action =
   | { type: "startGame" }
   | { type: "submit"; submission: Submission }
   | { type: "skip"; playerId: ID }
-  | { type: "vote"; submissionId: ID; voterId: ID; approve: boolean };
+  | { type: "vote"; submissionId: ID; voterId: ID; approve: boolean }
+  | { type: "rateProof"; submissionId: ID; raterId: ID; stars: number | null };

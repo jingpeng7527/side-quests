@@ -299,6 +299,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       } catch {
         if (timeout) clearTimeout(timeout);
       }
+      // No fix yet at all (iOS can take a while after the camera closes): the
+      // OS's last known position is better than none. The server also fills a
+      // missing one from this phone's last reported position.
+      if (!here) {
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60_000 }).catch(() => null);
+        if (last) here = { latitude: last.coords.latitude, longitude: last.coords.longitude };
+      }
       send({
         type: "submit",
         submission: {

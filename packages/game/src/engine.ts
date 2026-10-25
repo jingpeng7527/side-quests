@@ -1,5 +1,5 @@
 import type { Action, GameState, ID, Phase, Player, Quest, QuestDifficulty, Submission } from "./types";
-import { DEFAULT_POINTS, DEFAULT_SETTINGS, MAX_POINTS, MIN_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS } from "./types";
+import { DEFAULT_POINTS, DEFAULT_SETTINGS, JUDGES_PER_PROOF, MAX_POINTS, MAX_STARS, MIN_POINTS, SUBMIT_GRACE_MS, TRANSITION_MS } from "./types";
 
 /** Who sent an action: a player id, or the server itself (bots, AI, clock). */
 export type Actor = ID | "server";
@@ -44,6 +44,8 @@ export function authorize(state: GameState, action: Action, actor: Actor): boole
       return action.submission.playerId === actor;
     case "vote":
       return action.voterId === actor;
+    case "rateProof":
+      return action.raterId === actor;
     case "addQuest":
       return action.quest.authorId === actor && action.quest.source === "human";
     case "removeQuest": {
@@ -86,6 +88,7 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
         s.away = [...(s.away ?? []), action.playerId];
       }
       delete s.assignments[action.playerId];
+      if (s.phase === "verifying") handOffJudging(s, action.playerId, rand);
       return s;
     }
 
@@ -94,6 +97,7 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
       s.phase = action.phase;
       s.ready = {};
       delete s.transition;
+      if (action.phase === "verifying") dealJudging(s, rand);
       return s;
 
     case "requestPhase":
@@ -144,6 +148,7 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
       if (action.away) away.add(action.playerId);
       else away.delete(action.playerId);
       s.away = [...away];
+      if (action.away && s.phase === "verifying") handOffJudging(s, action.playerId, rand);
       return s;
     }
 
@@ -194,7 +199,9 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
     case "submit": {
       const sub = action.submission;
       if (!acceptingProofs(s, sub.takenAt, now) || s.assignments[sub.playerId] !== sub.questId) return prev;
-      s.submissions.push({ ...sub, votes: {} });
+      s.submissions.push({ ...sub, votes: {}, ratings: {} });
+      // A proof that squeaks in after judging was dealt still needs a judge.
+      if (s.judges) assignJudges(s, s.submissions[s.submissions.length - 1], rand);
       (s.history[sub.playerId] ??= []).push(sub.questId);
       assignNext(s, sub.playerId, rand);
       return s;
@@ -210,11 +217,106 @@ export function apply(prev: GameState, action: Action, now = Date.now(), rand: (
     }
     case "vote": {
       const sub = s.submissions.find((x) => x.id === action.submissionId);
-      if (!sub || sub.playerId === action.voterId) return prev;
+      if (!sub || !canJudge(s, sub, action.voterId)) return prev;
       sub.votes[action.voterId] = action.approve;
       return s;
     }
+    case "rateProof": {
+      const sub = s.submissions.find((x) => x.id === action.submissionId);
+      if (!sub || s.phase !== "verifying" || !canJudge(s, sub, action.raterId)) return prev;
+      const ratings = (sub.ratings ??= {});
+      if (action.stars === null) {
+        if (ratings[action.raterId] === undefined) return prev;
+        delete ratings[action.raterId];
+      } else {
+        const stars = Math.round(action.stars);
+        if (!(stars >= 1 && stars <= MAX_STARS)) return prev;
+        ratings[action.raterId] = stars;
+      }
+      return s;
+    }
   }
+}
+
+/**
+ * Splits the pool of proofs across the players: each proof gets
+ * JUDGES_PER_PROOF judges who didn't take it, always the least-loaded ones, so
+ * everyone ends up with about the same number to judge. A proof nobody else
+ * can judge gets none, and with no votes it stands (benefit of the doubt).
+ */
+export function dealJudging(s: GameState, rand: () => number = Math.random) {
+  s.judges = {};
+  for (const sub of shuffled(s.submissions, rand)) assignJudges(s, sub, rand);
+  balanceJudging(s);
+}
+
+/**
+ * Greedy dealing can strand the last few proofs on busy judges (their authors
+ * can't take them). Move proofs from the busiest judge to the least busy one
+ * until loads differ by at most one, or no legal move is left.
+ */
+function balanceJudging(s: GameState) {
+  const judges = s.judges!;
+  const away = new Set(s.away ?? []);
+  const pool = s.players.filter((p) => !away.has(p.id)).map((p) => p.id);
+  for (let guard = 0; guard < s.submissions.length * pool.length; guard++) {
+    const load = judgingLoad(s);
+    const byLoad = [...pool].sort((a, b) => (load.get(a) ?? 0) - (load.get(b) ?? 0));
+    const least = byLoad[0];
+    const most = byLoad[byLoad.length - 1];
+    if (!least || (load.get(most) ?? 0) - (load.get(least) ?? 0) <= 1) return;
+    const movable = s.submissions.find((sub) => sub.playerId !== least && judges[sub.id]?.includes(most) && !judges[sub.id].includes(least));
+    if (!movable) return;
+    judges[movable.id] = judges[movable.id].map((id) => (id === most ? least : id));
+  }
+}
+
+/** Gives one proof its judges, topping up to JUDGES_PER_PROOF from whoever has the fewest. */
+function assignJudges(s: GameState, sub: Submission, rand: () => number) {
+  const judges = (s.judges ??= {});
+  const current = (judges[sub.id] ??= []);
+  const away = new Set(s.away ?? []);
+  const load = judgingLoad(s);
+  const candidates = shuffled(s.players, rand)
+    .filter((p) => p.id !== sub.playerId && !away.has(p.id) && !current.includes(p.id))
+    .sort((a, b) => (load.get(a.id) ?? 0) - (load.get(b.id) ?? 0));
+  for (const p of candidates.slice(0, Math.max(0, JUDGES_PER_PROOF - current.length))) current.push(p.id);
+}
+
+/** Someone left mid-judging: their unjudged proofs go to whoever's still here. */
+function handOffJudging(s: GameState, playerId: ID, rand: () => number) {
+  if (!s.judges) return;
+  for (const sub of s.submissions) {
+    const judges = s.judges[sub.id];
+    if (!judges?.includes(playerId) || sub.votes[playerId] !== undefined) continue;
+    s.judges[sub.id] = judges.filter((id) => id !== playerId);
+    // They're already marked away by now, so it can't come straight back to them.
+    assignJudges(s, sub, rand);
+  }
+}
+
+function judgingLoad(s: GameState): Map<ID, number> {
+  const load = new Map<ID, number>();
+  for (const ids of Object.values(s.judges ?? {})) for (const id of ids) load.set(id, (load.get(id) ?? 0) + 1);
+  return load;
+}
+
+/** Whether this player may judge (and rate) this proof. Before judging is dealt, anyone but its author may. */
+export function canJudge(s: GameState, sub: Submission, playerId: ID): boolean {
+  if (sub.playerId === playerId) return false;
+  const assigned = s.judges?.[sub.id];
+  return assigned ? assigned.includes(playerId) : !s.judges;
+}
+
+/** The proofs this player has been asked to judge. */
+export function proofsToJudge(s: GameState, playerId: ID): Submission[] {
+  return s.submissions.filter((sub) => canJudge(s, sub, playerId));
+}
+
+/** Mean star rating over every rating given, or null when nobody rated. */
+export function averageRating(subs: Submission[]): { average: number; count: number } | null {
+  const stars = subs.flatMap((sub) => Object.values(sub.ratings ?? {}));
+  return stars.length ? { average: stars.reduce((a, b) => a + b, 0) / stars.length, count: stars.length } : null;
 }
 
 /**

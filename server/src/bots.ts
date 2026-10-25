@@ -1,4 +1,4 @@
-import { demoPlace, distance, newSeed, type Phase } from "@side-quests/game";
+import { demoPlace, distance, newSeed, proofsToJudge, type Phase } from "@side-quests/game";
 import { jitter, type Lobby } from "./lobby";
 
 const NAMES = ["Juno", "Rook", "Mae", "Ozzie", "Bex", "Tamsin"];
@@ -123,11 +123,13 @@ export class Bots {
 
   private vote(bot: string) {
     this.after(7, 9, () => this.lobby.dispatch({ type: "setReady", playerId: bot, ready: true }, "server"));
-    for (const sub of this.lobby.state?.submissions ?? []) {
-      if (sub.playerId === bot) continue;
-      this.after(1, 6, () =>
-        this.lobby.dispatch({ type: "vote", submissionId: sub.id, voterId: bot, approve: Math.random() < 0.85 }, "server"),
-      );
+    const s = this.lobby.state;
+    for (const sub of s ? proofsToJudge(s, bot) : []) {
+      this.after(1, 6, () => {
+        this.lobby.dispatch({ type: "vote", submissionId: sub.id, voterId: bot, approve: Math.random() < 0.85 }, "server");
+        // Like people, bots only sometimes bother to rate the quest.
+        if (Math.random() < 0.5) this.lobby.dispatch({ type: "rateProof", submissionId: sub.id, raterId: bot, stars: 2 + Math.floor(Math.random() * 4) }, "server");
+      });
     }
   }
 }

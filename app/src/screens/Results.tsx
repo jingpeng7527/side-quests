@@ -1,5 +1,6 @@
 import Feather from "@expo/vector-icons/Feather";
-import { approvals, formatDistance, isVerified, questPoints, ranking, rejections, wasAtPlace, type GameState, type Player, type Submission } from "@side-quests/game";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { MAX_STARS, approvals, formatDistance, isVerified, proofsToJudge, questPoints, ranking, rejections, wasAtPlace, type GameState, type Player, type Submission } from "@side-quests/game";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
@@ -71,12 +72,14 @@ function Stat({ value, label }: { value: number; label: string }) {
   );
 }
 
-/** Everyone judges everyone else's proof — photo first, big thumbs. */
+/** Each player judges their share of everyone else's proofs — photo first, big thumbs. */
 export function VerifyScreen() {
   const { state, me, isHost, send } = useGame();
   const { width } = useWindowDimensions();
   const [zoomed, setZoomed] = useState<Submission | null>(null);
-  const others = state.submissions.filter((s) => s.playerId !== me.id).sort((a, b) => a.takenAt - b.takenAt);
+  // The pool of proofs is split across the players, so you only see your share.
+  const others = proofsToJudge(state, me.id).sort((a, b) => a.takenAt - b.takenAt);
+  const anyoneElse = state.submissions.some((s) => s.playerId !== me.id);
   const mine = state.submissions.filter((s) => s.playerId === me.id);
   const judged = others.filter((s) => s.votes[me.id] !== undefined).length;
   const allJudged = judged === others.length;
@@ -102,7 +105,11 @@ export function VerifyScreen() {
             </Label>
           )}
           <Body color={color.stone} style={{ maxWidth: 360 }}>
-            {others.length ? "Did they actually do it? Majority rules — a tie goes to the player." : "No one else submitted anything. Brutal."}
+            {others.length
+              ? `These ${others.length === 1 ? "one's" : `${others.length} are`} yours to judge, out of ${state.submissions.length} in all. Did they actually do it? Any you skip count.`
+              : anyoneElse
+                ? "Nothing landed on your pile this time. Sit back while the others judge."
+                : "No one else submitted anything. Brutal."}
           </Body>
         </View>
         {others.map((sub) => (
@@ -112,10 +119,15 @@ export function VerifyScreen() {
             state={state}
             width={cardWidth}
             myVote={sub.votes[me.id]}
+            myStars={sub.ratings?.[me.id]}
             onZoom={() => setZoomed(sub)}
             onVote={(approve) => {
               void Haptics.selectionAsync().catch(() => {});
               send({ type: "vote", submissionId: sub.id, voterId: me.id, approve });
+            }}
+            onRate={(stars) => {
+              void Haptics.selectionAsync().catch(() => {});
+              send({ type: "rateProof", submissionId: sub.id, raterId: me.id, stars });
             }}
           />
         ))}
@@ -152,7 +164,25 @@ export function VerifyScreen() {
   );
 }
 
-function ProofCard({ sub, state, width, myVote, onZoom, onVote }: { sub: Submission; state: GameState; width: number; myVote?: boolean; onZoom: () => void; onVote: (approve: boolean) => void }) {
+function ProofCard({
+  sub,
+  state,
+  width,
+  myVote,
+  myStars,
+  onZoom,
+  onVote,
+  onRate,
+}: {
+  sub: Submission;
+  state: GameState;
+  width: number;
+  myVote?: boolean;
+  myStars?: number;
+  onZoom: () => void;
+  onVote: (approve: boolean) => void;
+  onRate: (stars: number | null) => void;
+}) {
   const quest = state.quests.find((q) => q.id === sub.questId);
   const name = state.players.find((p) => p.id === sub.playerId)?.name ?? "—";
   const atPlace = wasAtPlace(sub, quest?.place);
@@ -185,7 +215,42 @@ function ProofCard({ sub, state, width, myVote, onZoom, onVote }: { sub: Submiss
         <VoteButton text="Counts" icon="check" active={myVote === true} onPress={() => onVote(true)} />
         <VoteButton text="Doesn't count" icon="x" active={myVote === false} onPress={() => onVote(false)} />
       </View>
-      <Label size={11}>{`${approvals(sub)} say it counts · ${rejections(sub)} say it doesn't`}</Label>
+      <StarRating stars={myStars} onRate={onRate} />
+    </View>
+  );
+}
+
+/**
+ * Optional: how good was the quest itself? Starts greyed out and means nothing
+ * until you tap a star; tap your star again to take the rating back.
+ */
+function StarRating({ stars, onRate }: { stars?: number; onRate: (stars: number | null) => void }) {
+  const rated = stars !== undefined;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.m, paddingTop: space.xs }}>
+      <View style={{ flexShrink: 1, gap: 2 }}>
+        <Label size={10} bold color={rated ? color.signalRed : color.stone}>
+          {rated ? "Quest rated" : "Rate the quest · optional"}
+        </Label>
+        <Body size={13} color={rated ? color.inkBlack : color.stone}>
+          Would you want this one dealt to you?
+        </Body>
+      </View>
+      <View style={{ flexDirection: "row" }}>
+        {Array.from({ length: MAX_STARS }, (_, i) => i + 1).map((n) => (
+          <Pressable
+            key={n}
+            onPress={() => onRate(stars === n ? null : n)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel={stars === n ? `Clear your ${n}-star rating` : `Rate this quest ${n} of ${MAX_STARS} stars`}
+            accessibilityState={{ selected: stars === n }}
+            style={({ pressed }) => ({ padding: 4, transform: [{ scale: pressed ? 0.88 : 1 }] })}
+          >
+            <FontAwesome name="star" size={24} color={rated && n <= stars ? color.signalRed : color.paperLine} />
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }

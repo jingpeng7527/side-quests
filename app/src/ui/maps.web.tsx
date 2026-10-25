@@ -73,6 +73,8 @@ function LeafletMap({
   // The click handler is bound once; it reads the latest onTap through this ref.
   const tap = useRef(onTap);
   const moved = useRef(onUserMove);
+  const paint = useRef(draw);
+  paint.current = draw;
   const initialView = useRef({ centerKey, zoom });
   useEffect(() => {
     tap.current = onTap;
@@ -98,7 +100,20 @@ function LeafletMap({
     const resize = setTimeout(() => m.invalidateSize(), 50);
     // Pin fields, search feedback and the phone keyboard change the map's size
     // after mount. Keep Leaflet's pixel-to-coordinate calculations in sync.
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => m.invalidateSize({ animate: false }));
+    // If it started at zero size (mid-entrance, or before the ScrollView laid out),
+    // the first draw framed nothing: draw again once there's something to frame.
+    let hadSize = m.getSize().x > 0 && m.getSize().y > 0;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            m.invalidateSize({ animate: false });
+            const size = m.getSize();
+            if (hadSize || !size.x || !size.y) return;
+            hadSize = true;
+            layer.current?.clearLayers();
+            if (layer.current) paint.current(m, layer.current);
+          });
     observer?.observe(el.current);
     return () => {
       clearTimeout(resize);
