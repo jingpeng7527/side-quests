@@ -3,11 +3,15 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { createElement, useEffect, useRef } from "react";
 import { View, type ViewStyle } from "react-native";
+import { serverUrl } from "../lib/config";
 import { color } from "./theme";
 
 // Web maps: Leaflet over OpenStreetMap tiles, rendered quiet — grayscale and
 // warmed toward the app's paper tone — so the red route and pins carry the color,
 // close to the calm native Apple/Google look. (Keyless tiles: CARTO's now need a key.)
+// Tiles come through our own server (server/src/tiles.ts), which caches them and
+// falls back to Esri when OSM refuses — phones asking OSM directly got blocked at
+// random, leaving the map blank.
 
 let styled = false;
 function injectStyles() {
@@ -15,7 +19,9 @@ function injectStyles() {
   styled = true;
   const css = document.createElement("style");
   css.textContent = `
-    .sq-map { background: ${color.paper}; font-family: inherit; }
+    /* isolation + mask: iOS Safari sometimes skips painting filtered, transformed
+       tiles inside a rounded, clipped box; giving the map its own clipped layer fixes it. */
+    .sq-map { background: ${color.paper}; font-family: inherit; isolation: isolate; -webkit-mask-image: -webkit-radial-gradient(white, black); }
     .sq-map .sq-tiles { filter: grayscale(1) sepia(0.16) contrast(0.88) brightness(1.08); }
     .sq-map .leaflet-control-attribution { font-size: 9px; background: rgba(255,250,246,0.8); }
     .sq-pin { display: flex; align-items: center; justify-content: center; }
@@ -87,11 +93,21 @@ function LeafletMap({
     injectStyles();
     if (!el.current || map.current) return;
     const m = L.map(el.current, { zoomControl: false, attributionControl: true, center: ll(center), zoom });
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    const tiles = L.tileLayer(`${serverUrl()}/api/tiles/{z}/{x}/{y}.png`, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Esri',
       maxZoom: 19,
       className: "sq-tiles",
     }).addTo(m);
+    // A tile that fails (flaky mobile data) would otherwise stay a blank square for good.
+    tiles.on("tileerror", ({ tile }: L.TileErrorEvent) => {
+      const img = tile as HTMLImageElement & { retries?: number };
+      img.retries = (img.retries ?? 0) + 1;
+      if (img.retries > 3) return;
+      const src = img.src.replace(/[?&]retry=\d+$/, "");
+      setTimeout(() => {
+        img.src = `${src}${src.includes("?") ? "&" : "?"}retry=${img.retries}`;
+      }, 600 * img.retries);
+    });
     m.on("click", (e: L.LeafletMouseEvent) => tap.current?.({ latitude: e.latlng.lat, longitude: e.latlng.lng }));
     m.on("dragstart zoomstart", () => moved.current?.());
     layer.current = L.layerGroup().addTo(m);

@@ -1,6 +1,7 @@
 import { listCatalog } from "./catalog";
 import { walkingRoute } from "./directions";
 import { nameSpot, searchPlaces } from "./geocode";
+import { parseTile, serveTile } from "./tiles";
 import type { Env } from "./lobby";
 
 export { Lobby } from "./lobby";
@@ -13,9 +14,9 @@ const CORS = {
 };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
-    const res = await route(request, env);
+    const res = await route(request, env, ctx);
     // WebSocket upgrades can't have their headers changed.
     if (res.status === 101) return res;
     const out = new Response(res.body, res);
@@ -24,7 +25,7 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean); // ["api", ...]
   if (parts[0] !== "api") return new Response("Side Quests server", { status: 200 });
@@ -45,6 +46,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     const stub = lobby(env, parts[2].toUpperCase());
     if (parts[3] === "ws" || parts[3] === "photos") return stub.fetch(request);
     return stub.fetch("https://lobby/info");
+  }
+
+  // GET /api/tiles/:z/:x/:y.png -> a map tile, cached at the edge (see tiles.ts)
+  if (parts[1] === "tiles") {
+    const tile = parseTile(parts.slice(2));
+    return tile ? serveTile(request, tile.z, tile.x, tile.y, ctx) : new Response("bad tile", { status: 400 });
   }
 
   // GET /api/directions?from=lat,lng&to=lat,lng -> WalkingRoute
