@@ -13,6 +13,9 @@
   // Human-written quests from finished games (server/src/catalog.ts). Local `wrangler dev` simulates this
   // with no setup; deployed, it's a real D1 database (`wrangler d1 create side-quests-catalog`).
   "d1_databases": [{ "binding": "CATALOG", "database_name": "side-quests-catalog", "database_id": "60ceb201-0de6-49ef-b3b4-59a9f1ad2b42" }],
+  // Proof photos for well-rated quests (server/src/photos.ts) — everything else's photos
+  // expire with their lobby. Local `wrangler dev` simulates this with no setup.
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "side-quests-photos" }],
   // The web app (npm run web:build) is served from the same address as the game,
   // so a join link works in any phone browser. /api/* goes to the game code;
   // any other unknown path (e.g. /join/ABCD) falls back to the app.

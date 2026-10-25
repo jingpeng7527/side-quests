@@ -26,6 +26,7 @@ import {
 } from "@side-quests/game";
 import { Bots } from "./bots";
 import { saveToCatalog } from "./catalog";
+import { saveGoodPhotos } from "./photos";
 import { DEFAULT_MODEL, writeQuests } from "./quests";
 import { rateQuests } from "./ratings";
 
@@ -41,6 +42,8 @@ export interface Env {
   HOST_HANDOFF_SECONDS?: string;
   /** Human-written quests from finished games, for LLM inspiration and future curation. Optional — unset means no catalog. */
   CATALOG?: D1Database;
+  /** Where well-rated quests' proof photos get copied, so they survive past the lobby's TTL. */
+  PHOTOS?: R2Bucket;
   /** The commit this deployment was built from, set by CI (`--var GIT_SHA:…`). Unset locally. */
   GIT_SHA?: string;
 }
@@ -288,7 +291,10 @@ export class Lobby extends DurableObject<Env> {
     if (next.phase !== prev.phase) {
       this.bots.phaseChanged(next.phase);
       if (next.phase === "review") this.writeStarterQuests();
-      if (next.phase === "scoreboard") this.ctx.waitUntil(saveToCatalog(this.env.CATALOG, next));
+      if (next.phase === "scoreboard") {
+        this.ctx.waitUntil(saveToCatalog(this.env.CATALOG, next));
+        this.ctx.waitUntil(saveGoodPhotos(this.env.PHOTOS, this.ctx.storage, next));
+      }
     }
     if (action.type === "requestPhase" && next.transition) this.landTransition(next.transition);
     if (action.type === "addQuest" || action.type === "addAIQuests" || (next.phase === "review" && prev.phase !== "review")) this.rateSoon();
