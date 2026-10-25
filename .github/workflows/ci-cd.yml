@@ -24,7 +24,9 @@ jobs:
   deploy:
     name: Deploy to Cloudflare
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Skips cleanly (not a failure) on any fork/repo that hasn't set this secret —
+    # deploying is tied to one Cloudflare account, so it's opt-in per repo.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
