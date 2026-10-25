@@ -45,7 +45,6 @@ export function EndGameScreen() {
         <View style={{ flexDirection: "row" }}>
           <Stat value={mine.length} label="Quests done" />
           <Stat value={state.skipsUsed[me.id] ?? 0} label="Skipped" />
-          <Stat value={state.submissions.length} label="Lobby total" />
         </View>
         {/* Your route: where each proof was snapped, in order. */}
         <View style={{ height: 240, borderRadius: radius.card, overflow: "hidden", backgroundColor: color.paperBright }}>

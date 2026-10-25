@@ -109,7 +109,7 @@ export function PlayerRow({ player, state, isMe, trailing }: { player: Player; s
   );
 }
 
-/** "15 MIN · 3 SKIPS · AI ON" with a way into the settings for the host. */
+/** "15 MIN · 3 SKIPS · AI ON" — live for everyone; only the host gets the controls icon and a way in. */
 export function SettingsSummary({ settings, editable, onEdit }: { settings: GameSettings; editable: boolean; onEdit: () => void }) {
   const pal = usePalette();
   const summary = [
@@ -125,7 +125,7 @@ export function SettingsSummary({ settings, editable, onEdit }: { settings: Game
       accessibilityRole="button"
       style={{ flexDirection: "row", alignItems: "center", gap: space.m, padding: space.m, backgroundColor: pal.raised, borderRadius: radius.card }}
     >
-      <Feather name="sliders" size={20} color={pal.fg} />
+      {editable && <Feather name="sliders" size={20} color={pal.fg} />}
       <View style={{ flex: 1, gap: 2 }}>
         <Label size={13} bold color={pal.fg}>
           Game settings

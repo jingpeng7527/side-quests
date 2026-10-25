@@ -142,17 +142,23 @@ export function QuestsScreen() {
             accessibilityLabel="New quest"
             style={{ fontFamily: font.body, fontSize: 16, lineHeight: 23, color: color.inkBlack, minHeight: 72, textAlignVertical: "top" }}
           />
-          {draftPlace && <PlaceChip place={draftPlace} onRemove={() => setDraftPlace(undefined)} />}
+          {/* The chosen place takes the "Add a place" link's spot, so the composer never changes height. */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
-            {!draftPlace && (
-              <Pressable onPress={() => setPicking(true)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 }}>
-                <Feather name="map-pin" size={15} color={color.signalRed} />
-                <Label size={11} bold color={color.signalRed}>
-                  Add a place
-                </Label>
-              </Pressable>
+            {draftPlace ? (
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <PlaceChip place={draftPlace} compact onRemove={() => setDraftPlace(undefined)} />
+              </View>
+            ) : (
+              <>
+                <Pressable onPress={() => setPicking(true)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 }}>
+                  <Feather name="map-pin" size={15} color={color.signalRed} />
+                  <Label size={11} bold color={color.signalRed}>
+                    Add a place
+                  </Label>
+                </Pressable>
+                <View style={{ flex: 1 }} />
+              </>
             )}
-            <View style={{ flex: 1 }} />
             <Label size={11}>
               {draft.length}/{MAX_QUEST}
             </Label>
@@ -190,7 +196,7 @@ export function QuestsScreen() {
 }
 
 /** "📍 HAYES VALLEY · 250 M" — shown wherever a quest has a place. */
-export function PlaceChip({ place, onRemove }: { place: QuestPlace; onRemove?: () => void }) {
+export function PlaceChip({ place, onRemove, compact }: { place: QuestPlace; onRemove?: () => void; compact?: boolean }) {
   const pal = usePalette();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, borderWidth: 1.5, borderColor: pal.accent, maxWidth: "100%" }}>
@@ -198,7 +204,11 @@ export function PlaceChip({ place, onRemove }: { place: QuestPlace; onRemove?: (
       <Label size={11} bold color={pal.accent} numberOfLines={1} style={{ flexShrink: 1 }}>
         {place.name}
       </Label>
-      <Label size={11}>· {place.radius} m</Label>
+      {!compact && (
+        <Label size={11} numberOfLines={1} style={{ flexShrink: 0 }}>
+          · {place.radius} m
+        </Label>
+      )}
       {onRemove && (
         <Pressable onPress={onRemove} accessibilityLabel="Remove place" hitSlop={10}>
           <Feather name="x" size={13} color={pal.accent} />
@@ -255,7 +265,7 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
         const permission = await Location.requestForegroundPermissionsAsync();
         if (!permission.granted) {
           if (!cancelled) {
-            setLocationError("Location permission is off. Search for a place or move the map to choose one.");
+            setLocationError("Location is off · search or tap the map");
             setLocating(false);
           }
           return;
@@ -280,14 +290,14 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
         if (fix) {
           applyFix(fix);
         } else if (!cancelled) {
-          setLocationError("Still looking for your location. Search or move the map to choose a place.");
+          setLocationError("Still finding you · search or tap the map");
           setLocating(false);
           // A slow GPS fix can still improve the map if the player hasn't moved it.
           void current.then(applyFix).catch(() => {});
         }
       } catch {
         if (!cancelled) {
-          setLocationError("Couldn't find your location. Search or move the map to choose a place.");
+          setLocationError("Couldn't find you · search or tap the map");
           setLocating(false);
         }
       }
@@ -334,10 +344,10 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
       const hits = await searchPlaces(query.trim(), currentLocation);
       if (request !== searchRequest.current) return;
       setResults(hits);
-      if (!hits.length) setSearchError("No match — try another name, or tap the map.");
+      if (!hits.length) setSearchError("No match · try another name or tap the map");
     } catch {
       if (request !== searchRequest.current) return;
-      setSearchError("Search isn't working right now — tap the map instead.");
+      setSearchError("Search is down · tap the map instead");
     } finally {
       if (request === searchRequest.current) setSearching(false);
     }
@@ -358,6 +368,17 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
     setSearchError(null);
   };
 
+  // One short status line with a fixed height, so messages coming and going never shove the map around.
+  const status: { text: string; tone: "error" | "quiet"; busy?: boolean } | null = searchError
+    ? { text: searchError, tone: "error" }
+    : locating
+      ? { text: currentLocation ? "Updating your location…" : "Finding you…", tone: "quiet", busy: true }
+      : pin && currentLocation
+        ? { text: `${formatDistance(distance(currentLocation, pin))} from you`, tone: "quiet" }
+        : locationError
+          ? { text: locationError, tone: "quiet" }
+          : null;
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => close()}>
       <Screen
@@ -365,7 +386,7 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
         left={{ icon: "x", onPress: () => close(), label: "Cancel" }}
         footer={
           <Button
-            title={pin ? "Pin it here" : "Tap the map to drop a pin"}
+            title={pin ? "Pin it here" : "Tap the map"}
             icon="map-pin"
             disabled={!pin}
             onPress={() => pin && close({ name: name.trim() || "Pinned spot", coordinate: pin, radius: radiusM })}
@@ -394,7 +415,6 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
             />
             {searching && <ActivityIndicator color={color.signalRed} />}
           </View>
-          {searchError && <Body size={13} color={color.signalRed}>{searchError}</Body>}
 
           <View style={{ flex: 1, minHeight: 220, borderRadius: radius.card, overflow: "hidden", borderWidth: 2, borderColor: color.inkBlack }}>
             <PickerMap
@@ -425,8 +445,8 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
-            <Label size={11} style={{ flex: 1 }}>
-              Counts as there within
+            <Label size={11} style={{ flex: 1 }} numberOfLines={1}>
+              Radius
             </Label>
             {PLACE_RADIUS_OPTIONS.map((r) => (
               <Pressable
@@ -443,15 +463,16 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
             ))}
           </View>
 
-          {locating && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }} accessibilityLiveRegion="polite">
-              <ActivityIndicator color={color.signalRed} />
-              <Body size={12} color={color.stone}>{currentLocation ? "Updating your location…" : "Finding your location…"}</Body>
-            </View>
-          )}
-          {locationError && <Body size={12} color={color.stone} accessibilityLiveRegion="polite">{locationError}</Body>}
+          <View style={{ height: 18, flexDirection: "row", alignItems: "center", gap: space.s }} accessibilityLiveRegion="polite">
+            {status?.busy && <ActivityIndicator size="small" color={color.signalRed} />}
+            {status && (
+              <Label size={10} numberOfLines={1} color={status.tone === "error" ? color.signalRed : color.stone} style={{ flexShrink: 1 }}>
+                {status.text}
+              </Label>
+            )}
+          </View>
           {pin ? (
-            <View style={{ gap: 4 }}>
+            <View>
               <TextInput
                 value={name}
                 onChangeText={(t) => {
@@ -462,9 +483,8 @@ function PlacePicker({ visible, onDone }: { visible: boolean; onDone: (p: QuestP
                 placeholder="Name this spot"
                 placeholderTextColor={color.stone}
                 accessibilityLabel="Name this spot"
-                style={{ fontFamily: font.bodyMedium, fontSize: 17, color: color.inkBlack, backgroundColor: color.paperBright, borderRadius: radius.field, paddingHorizontal: space.m, paddingVertical: 12 }}
+                style={{ fontFamily: font.bodyMedium, fontSize: 16, color: color.inkBlack, backgroundColor: color.paperBright, borderRadius: radius.field, paddingHorizontal: space.m, paddingVertical: 10, height: 48 }}
               />
-              {currentLocation && <Label size={10}>{formatDistance(distance(currentLocation, pin))} from you</Label>}
             </View>
           ) : (
             <Button title="Use my spot" kind="outline" icon="crosshair" size="md" disabled={!currentLocation} onPress={() => currentLocation && void drop(currentLocation, "Right here")} />
