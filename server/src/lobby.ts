@@ -36,7 +36,7 @@ export interface Env {
   /** Overrides for testing: how long a quiet lobby lives, and how long before an away host is replaced. */
   LOBBY_TTL_SECONDS?: string;
   HOST_HANDOFF_SECONDS?: string;
-  /** Quests from finished games, for LLM inspiration and future curation. Optional — unset means no catalog. */
+  /** Human-written quests from finished games, for LLM inspiration and future curation. Optional — unset means no catalog. */
   CATALOG?: D1Database;
 }
 

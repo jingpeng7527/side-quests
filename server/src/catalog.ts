@@ -19,15 +19,17 @@ interface CatalogRow {
 }
 
 /**
- * Saves every quest from a finished game that was actually dealt and attempted
- * (has at least one submission) — quests that were written but never played
- * don't make the catalog.
+ * Saves human-written quests from a finished game that were actually dealt and
+ * attempted (have at least one submission). AI-written quests are skipped —
+ * the point is capturing people's own ideas, not the AI's own output — and
+ * quests that were written but never played don't make the catalog either.
  */
 export async function saveToCatalog(db: D1Database | undefined, state: GameState): Promise<void> {
   if (!db) return;
   const playedAt = Date.now();
   const stmts = state.quests
     .map((q) => {
+      if (q.source !== "human") return null;
       const subs = state.submissions.filter((s) => s.questId === q.id);
       if (!subs.length) return null;
       return db
