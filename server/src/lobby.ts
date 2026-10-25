@@ -40,6 +40,8 @@ export interface Env {
   HOST_HANDOFF_SECONDS?: string;
   /** Human-written quests from finished games, for LLM inspiration and future curation. Optional — unset means no catalog. */
   CATALOG?: D1Database;
+  /** The commit this deployment was built from, set by CI (`--var GIT_SHA:…`). Unset locally. */
+  GIT_SHA?: string;
 }
 
 /**

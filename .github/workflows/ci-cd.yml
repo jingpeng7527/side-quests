@@ -40,4 +40,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: be57d7818a375a509fef13d5dd81ff40
           workingDirectory: server
-          command: deploy --var DEV_TOOLS:0
+          command: deploy --var DEV_TOOLS:0 --var GIT_SHA:${{ github.sha }}
