@@ -1,0 +1,45 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Typecheck & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: cd app && npx expo lint
+
+  deploy:
+    name: Deploy to Cloudflare
+    needs: test
+    # Skips cleanly (not a failure) on any fork/repo that hasn't set this secret —
+    # deploying is tied to one Cloudflare account, so it's opt-in per repo.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      # Builds app/dist; `wrangler deploy` below serves it alongside the game.
+      - run: npm run web:build
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: be57d7818a375a509fef13d5dd81ff40
+          workingDirectory: server
+          command: deploy --var DEV_TOOLS:0 --var GIT_SHA:${{ github.sha }}
