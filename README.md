@@ -2,7 +2,7 @@
 
 A party game for friend groups: everyone writes side quests, the deck gets dealt out at random, and players race the clock to complete as many as they can, proving each one with a photo. Then the lobby votes on the proof and crowns a winner.
 
-Runs on **iOS, Android and the web** from one codebase.
+This game was created by @sugarfig @r-magnus @jingpeng7527 @aaccaa19 for the unwrap hackathon in 2026.
 
 ## Getting started (any machine)
 
