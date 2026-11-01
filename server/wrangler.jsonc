@@ -16,6 +16,10 @@
   // Proof photos for well-rated quests (server/src/photos.ts) — everything else's photos
   // expire with their lobby. Local `wrangler dev` simulates this with no setup.
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "side-quests-photos" }],
+  // Cached sanitized fact snapshots for the standalone cross-city demo (server/src/demo/*)
+  // — durable across isolates/cold starts, unlike an in-memory cache. Local `wrangler dev`
+  // simulates this with no setup. Unused by the real game.
+  "kv_namespaces": [{ "binding": "DEMO_SNAPSHOTS", "id": "cdf76c3a15f7425984241378a7f40de3" }],
   // The web app (npm run web:build) is served from the same address as the game,
   // so a join link works in any phone browser. /api/* goes to the game code;
   // any other unknown path (e.g. /join/ABCD) falls back to the app.
@@ -27,4 +31,6 @@
   // Dev shortcuts (bots via DEV menu, skip to end, seeding). Set to "0" in production.
   "vars": { "DEV_TOOLS": "1" }
   // OPENAI_API_KEY is a secret: `wrangler secret put OPENAI_API_KEY` when deployed, server/.env locally.
+  // OPENTRIPMAP_API_KEY and TICKETMASTER_API_KEY are optional secrets for the standalone
+  // cross-city demo only (server/src/demo/*, /demo-cities.html) — unused by the real game.
 }

@@ -1,0 +1,18 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // A second, separate Worker — its own name and URL — so the standalone cross-city
+  // demo (server/src/demo/*) can be shared without touching the real game's deployment
+  // at side-quests.letsaskai.workers.dev. It reuses that same demo code directly.
+  "name": "side-quests-demo",
+  "main": "index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Same cached-snapshot KV namespace the main worker uses — just a cache, safe to share.
+  "kv_namespaces": [{ "binding": "DEMO_SNAPSHOTS", "id": "cdf76c3a15f7425984241378a7f40de3" }],
+  // A copy of app/public/demo-cities.html (kept here so this directory deploys standalone).
+  // Re-copy it here if the source page changes.
+  "assets": { "directory": "./public", "run_worker_first": ["/api/*"] }
+  // Secrets (OPENAI_API_KEY, OPENTRIPMAP_API_KEY, TICKETMASTER_API_KEY) are set per-worker
+  // with `wrangler secret put <NAME>` — not shared automatically with the main worker.
+}

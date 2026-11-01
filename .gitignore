@@ -16,3 +16,4 @@ app/android/
 .env.*
 !.env.example
 server/.devs.vars
+.history
