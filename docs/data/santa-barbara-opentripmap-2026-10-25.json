@@ -1,0 +1,577 @@
+{
+  "source": "OpenTripMap",
+  "retrievedAt": "2026-10-25T09:14:20.928Z",
+  "query": {
+    "center": {
+      "lat": 34.4208,
+      "lon": -119.6982
+    },
+    "radiusMeters": 10000,
+    "rate": 2,
+    "format": "json",
+    "limit": 100
+  },
+  "count": 70,
+  "places": [
+    {
+      "xid": "W349829214",
+      "name": "De la Guerra Plaza",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 106,
+      "lat": 34.419944763183594,
+      "lon": -119.6987075805664
+    },
+    {
+      "xid": "N368174531",
+      "name": "Santa Barbara Historical Museum",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 117,
+      "lat": 34.42153549194336,
+      "lon": -119.6972885131836
+    },
+    {
+      "xid": "W243609086",
+      "name": "Casa de la Guerra",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 129,
+      "lat": 34.42030334472656,
+      "lon": -119.69947052001953
+    },
+    {
+      "xid": "N358848553",
+      "name": "El Paseo Plaza de la Guerra",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 130,
+      "lat": 34.42055130004883,
+      "lon": -119.69957733154297
+    },
+    {
+      "xid": "W40118632",
+      "name": "",
+      "kinds": "fortifications,historic,urban_environment,gardens_and_parks,cultural,natural,interesting_places,nature_reserves,other_fortifications,other_nature_conservation_areas",
+      "distanceMeters": 145,
+      "lat": 34.42208480834961,
+      "lon": -119.69788360595703
+    },
+    {
+      "xid": "W40118629",
+      "name": "",
+      "kinds": "fortifications,historic,urban_environment,gardens_and_parks,cultural,natural,interesting_places,nature_reserves,other_fortifications,other_nature_conservation_areas",
+      "distanceMeters": 192,
+      "lat": 34.422401428222656,
+      "lon": -119.69741821289062
+    },
+    {
+      "xid": "R3335922",
+      "name": "El Presidio de Santa Barbara State Historic Park",
+      "kinds": "fortifications,historic,urban_environment,gardens_and_parks,cultural,natural,interesting_places,nature_reserves,other_fortifications,other_nature_conservation_areas",
+      "distanceMeters": 192,
+      "lat": 34.422401428222656,
+      "lon": -119.69741821289062
+    },
+    {
+      "xid": "W243609077",
+      "name": "Lobero Theatre",
+      "kinds": "theatres_and_entertainments,concert_halls,cultural,interesting_places",
+      "distanceMeters": 193,
+      "lat": 34.421669006347656,
+      "lon": -119.70001983642578
+    },
+    {
+      "xid": "W40118631",
+      "name": "",
+      "kinds": "fortifications,historic,urban_environment,gardens_and_parks,cultural,natural,interesting_places,nature_reserves,other_fortifications,other_nature_conservation_areas",
+      "distanceMeters": 216,
+      "lat": 34.422733306884766,
+      "lon": -119.69795227050781
+    },
+    {
+      "xid": "W40118630",
+      "name": "Presidio of Santa Barbara",
+      "kinds": "fortifications,historic,urban_environment,gardens_and_parks,cultural,natural,interesting_places,nature_reserves,other_fortifications,other_nature_conservation_areas",
+      "distanceMeters": 224,
+      "lat": 34.42274856567383,
+      "lon": -119.69886016845703
+    },
+    {
+      "xid": "Q7890900",
+      "name": "United States Post Office",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 237,
+      "lat": 34.42277908325195,
+      "lon": -119.69916534423828
+    },
+    {
+      "xid": "Q85787145",
+      "name": "Museum of Contemporary Art Santa Barbara",
+      "kinds": "museums,cultural,interesting_places,other_museums",
+      "distanceMeters": 297,
+      "lat": 34.41869354248047,
+      "lon": -119.7001953125
+    },
+    {
+      "xid": "Q5761953",
+      "name": "Hill-Carrillo Adobe",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 349,
+      "lat": 34.42194366455078,
+      "lon": -119.70173645019531
+    },
+    {
+      "xid": "Q7282155",
+      "name": "Rafael Gonzalez House",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 436,
+      "lat": 34.424217224121094,
+      "lon": -119.69585418701172
+    },
+    {
+      "xid": "Q6155577",
+      "name": "Janssens-Orella-Birk Building",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 469,
+      "lat": 34.42211151123047,
+      "lon": -119.70305633544922
+    },
+    {
+      "xid": "Q2704990",
+      "name": "Santa Barbara County Courthouse",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 555,
+      "lat": 34.42435073852539,
+      "lon": -119.70246124267578
+    },
+    {
+      "xid": "N368174524",
+      "name": "Santa Barbara Museum of Art",
+      "kinds": "cultural,museums,interesting_places,art_galleries",
+      "distanceMeters": 605,
+      "lat": 34.42333221435547,
+      "lon": -119.70402526855469
+    },
+    {
+      "xid": "W234950157",
+      "name": "Karpeles Manuscript Library Museum",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 648,
+      "lat": 34.42257308959961,
+      "lon": -119.70492553710938
+    },
+    {
+      "xid": "W234951447",
+      "name": "The Granada Theatre",
+      "kinds": "cultural,cinemas,theatres_and_entertainments,interesting_places",
+      "distanceMeters": 690,
+      "lat": 34.42399215698242,
+      "lon": -119.70464324951172
+    },
+    {
+      "xid": "Q4753506",
+      "name": "Andalucia Building",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 698,
+      "lat": 34.415748596191406,
+      "lon": -119.69366455078125
+    },
+    {
+      "xid": "N2799309123",
+      "name": "Casa Dolores",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 775,
+      "lat": 34.418697357177734,
+      "lon": -119.70624542236328
+    },
+    {
+      "xid": "N4302164505",
+      "name": "Moreton Bay Fig Tree",
+      "kinds": "other,unclassified_objects,interesting_places,historic_object",
+      "distanceMeters": 881,
+      "lat": 34.41364288330078,
+      "lon": -119.69403076171875
+    },
+    {
+      "xid": "W54676718",
+      "name": "Arlington Theatre",
+      "kinds": "cultural,cinemas,theatres_and_entertainments,interesting_places",
+      "distanceMeters": 890,
+      "lat": 34.4242057800293,
+      "lon": -119.70696258544922
+    },
+    {
+      "xid": "N6144124453",
+      "name": "Santa Barbara",
+      "kinds": "railway_stations,industrial_facilities,interesting_places",
+      "distanceMeters": 935,
+      "lat": 34.41363525390625,
+      "lon": -119.69284057617188
+    },
+    {
+      "xid": "W242892679",
+      "name": "Our Lady of Sorrows Church",
+      "kinds": "religion,churches,interesting_places,catholic_churches",
+      "distanceMeters": 970,
+      "lat": 34.42627716064453,
+      "lon": -119.70642852783203
+    },
+    {
+      "xid": "N5331977679",
+      "name": "Santa Barbara Wine Collective",
+      "kinds": "railway_stations,industrial_facilities,architecture,historic_architecture,interesting_places,restaurants,foods,tourist_facilities,other_buildings_and_structures",
+      "distanceMeters": 987,
+      "lat": 34.41445541381836,
+      "lon": -119.690673828125
+    },
+    {
+      "xid": "W839140242",
+      "name": "Alameda Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 1021,
+      "lat": 34.42776870727539,
+      "lon": -119.70545196533203
+    },
+    {
+      "xid": "W257626166",
+      "name": "Alice Keck Park Memorial Gardens",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 1189,
+      "lat": 34.429290771484375,
+      "lon": -119.70610809326172
+    },
+    {
+      "xid": "Q17586338",
+      "name": "Burton Mound",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 1218,
+      "lat": 34.41109848022461,
+      "lon": -119.69200134277344
+    },
+    {
+      "xid": "W275866845",
+      "name": "Santa Barbara Surfing Museum",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 1231,
+      "lat": 34.41317367553711,
+      "lon": -119.68846893310547
+    },
+    {
+      "xid": "W44580689",
+      "name": "Ambassador Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 1264,
+      "lat": 34.410675048828125,
+      "lon": -119.69190216064453
+    },
+    {
+      "xid": "N358822446",
+      "name": "Ambassador Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 1265,
+      "lat": 34.410274505615234,
+      "lon": -119.69290924072266
+    },
+    {
+      "xid": "W247764302",
+      "name": "Allan Herschel 3-Abrest Carousel",
+      "kinds": "architecture,historic_architecture,other_amusement_rides,interesting_places,amusements,other_buildings_and_structures",
+      "distanceMeters": 1299,
+      "lat": 34.41492462158203,
+      "lon": -119.68597412109375
+    },
+    {
+      "xid": "W40117617",
+      "name": "West Beach",
+      "kinds": "natural,interesting_places,beaches,other_beaches",
+      "distanceMeters": 1342,
+      "lat": 34.411441802978516,
+      "lon": -119.6889419555664
+    },
+    {
+      "xid": "Q7419208",
+      "name": "Santa Barbara Bowl",
+      "kinds": "architecture,historic_architecture,theatres_and_entertainments,cultural,interesting_places,music_venues,amphitheatres",
+      "distanceMeters": 1390,
+      "lat": 34.43278884887695,
+      "lon": -119.69380950927734
+    },
+    {
+      "xid": "N368174545",
+      "name": "Santa Barbara Museum of Natural History Sea Center",
+      "kinds": "aquariums,urban_environment,gardens_and_parks,cultural,museums,interesting_places,zoos",
+      "distanceMeters": 1627,
+      "lat": 34.41042709350586,
+      "lon": -119.68568420410156
+    },
+    {
+      "xid": "W275865140",
+      "name": "Santa Barbara Maritime Museum",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 1912,
+      "lat": 34.40394973754883,
+      "lon": -119.69383239746094
+    },
+    {
+      "xid": "W928814483",
+      "name": "Franceschi Steps",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 2065,
+      "lat": 34.439178466796875,
+      "lon": -119.69463348388672
+    },
+    {
+      "xid": "W446745489",
+      "name": "Leadbetter Beach",
+      "kinds": "natural,interesting_places,beaches,other_beaches",
+      "distanceMeters": 2214,
+      "lat": 34.40093994140625,
+      "lon": -119.70060729980469
+    },
+    {
+      "xid": "Q105308770",
+      "name": "A.C. Postel Memorial Rose Garden",
+      "kinds": "gardens_and_parks,cultural,urban_environment,interesting_places",
+      "distanceMeters": 2235,
+      "lat": 34.43754959106445,
+      "lon": -119.71171569824219
+    },
+    {
+      "xid": "W44580794",
+      "name": "Franceschi Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 2241,
+      "lat": 34.440956115722656,
+      "lon": -119.69657897949219
+    },
+    {
+      "xid": "Q22078082",
+      "name": "Mission Park, Santa Barbara",
+      "kinds": "gardens_and_parks,cultural,urban_environment,interesting_places",
+      "distanceMeters": 2292,
+      "lat": 34.438331604003906,
+      "lon": -119.71138763427734
+    },
+    {
+      "xid": "W389994752",
+      "name": "Mission Santa Barbara",
+      "kinds": "religion,other_temples,interesting_places",
+      "distanceMeters": 2389,
+      "lat": 34.43837356567383,
+      "lon": -119.71322631835938
+    },
+    {
+      "xid": "W40117616",
+      "name": "East Beach",
+      "kinds": "natural,interesting_places,beaches,other_beaches",
+      "distanceMeters": 2438,
+      "lat": 34.4160041809082,
+      "lon": -119.67231750488281
+    },
+    {
+      "xid": "W913954722",
+      "name": "santa barbra mission cemetary",
+      "kinds": "cemeteries,historic,burial_places,interesting_places",
+      "distanceMeters": 2432,
+      "lat": 34.43879699707031,
+      "lon": -119.71331024169922
+    },
+    {
+      "xid": "W389994750",
+      "name": "El Presidio de Santa Barbara State Historic Park",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 2538,
+      "lat": 34.43838882446289,
+      "lon": -119.71585845947266
+    },
+    {
+      "xid": "N358791551",
+      "name": "Saint Anthonys Seminary",
+      "kinds": "religion,other_temples,interesting_places",
+      "distanceMeters": 2596,
+      "lat": 34.439151763916016,
+      "lon": -119.71572875976562
+    },
+    {
+      "xid": "W44580989",
+      "name": "Shoreline Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 2657,
+      "lat": 34.397430419921875,
+      "lon": -119.70454406738281
+    },
+    {
+      "xid": "N368174527",
+      "name": "Santa Barbara Museum of Natural History",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 2670,
+      "lat": 34.44083023071289,
+      "lon": -119.71430206298828
+    },
+    {
+      "xid": "W377449094",
+      "name": "Rocky Nook Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 2734,
+      "lat": 34.443050384521484,
+      "lon": -119.71099853515625
+    },
+    {
+      "xid": "W250470641",
+      "name": "Santa Barbara Zoological Gardens",
+      "kinds": "urban_environment,gardens_and_parks,cultural,museums,interesting_places,zoos",
+      "distanceMeters": 3128,
+      "lat": 34.419586181640625,
+      "lon": -119.66419982910156
+    },
+    {
+      "xid": "W172228725",
+      "name": "Andree Clark Bird Refuge",
+      "kinds": "urban_environment,gardens_and_parks,cultural,natural,interesting_places,nature_reserves,other_nature_conservation_areas",
+      "distanceMeters": 3433,
+      "lat": 34.42030334472656,
+      "lon": -119.66085815429688
+    },
+    {
+      "xid": "Q7295990",
+      "name": "Rattlesnake Canyon",
+      "kinds": "interesting_places,natural,nature_reserves,other_nature_conservation_areas",
+      "distanceMeters": 3425,
+      "lat": 34.450801849365234,
+      "lon": -119.70700073242188
+    },
+    {
+      "xid": "N538588117",
+      "name": "Santa Barbara Light",
+      "kinds": "lighthouses,architecture,interesting_places",
+      "distanceMeters": 3523,
+      "lat": 34.39630889892578,
+      "lon": -119.72260284423828
+    },
+    {
+      "xid": "W44580788",
+      "name": "Parma Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 3610,
+      "lat": 34.44965362548828,
+      "lon": -119.6800308227539
+    },
+    {
+      "xid": "W44580676",
+      "name": "Elings Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 3640,
+      "lat": 34.41096878051758,
+      "lon": -119.73597717285156
+    },
+    {
+      "xid": "Q3456814",
+      "name": "Santa Barbara Botanic Garden",
+      "kinds": "gardens_and_parks,cultural,urban_environment,interesting_places",
+      "distanceMeters": 3793,
+      "lat": 34.453800201416016,
+      "lon": -119.70899963378906
+    },
+    {
+      "xid": "W44580602",
+      "name": "Skofield Park",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 3869,
+      "lat": 34.45563507080078,
+      "lon": -119.69618225097656
+    },
+    {
+      "xid": "W172228729",
+      "name": "Santa Barbara Cemetery",
+      "kinds": "cemeteries,historic,burial_places,interesting_places",
+      "distanceMeters": 3890,
+      "lat": 34.419246673583984,
+      "lon": -119.65592956542969
+    },
+    {
+      "xid": "Q105309862",
+      "name": "Rattlesnake Canyon Bridge",
+      "kinds": "bridges,architecture,interesting_places,stone_bridges",
+      "distanceMeters": 4119,
+      "lat": 34.45759963989258,
+      "lon": -119.69223022460938
+    },
+    {
+      "xid": "W16970443",
+      "name": "Douglas Family Preserve",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 4262,
+      "lat": 34.401729583740234,
+      "lon": -119.73844146728516
+    },
+    {
+      "xid": "W854080763",
+      "name": "Lotusland",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "distanceMeters": 4534,
+      "lat": 34.443599700927734,
+      "lon": -119.6572494506836
+    },
+    {
+      "xid": "W345801519",
+      "name": "Arroyo Burro Beach",
+      "kinds": "natural,interesting_places,beaches,other_beaches",
+      "distanceMeters": 4593,
+      "lat": 34.402671813964844,
+      "lon": -119.74311828613281
+    },
+    {
+      "xid": "Q65054434",
+      "name": "Val Verde",
+      "kinds": "architecture,historic_architecture,interesting_places,manor_houses",
+      "distanceMeters": 5031,
+      "lat": 34.439998626708984,
+      "lon": -119.64861297607422
+    },
+    {
+      "xid": "Q49548261",
+      "name": "Rattlesnake Canyon Park",
+      "kinds": "gardens_and_parks,cultural,urban_environment,interesting_places",
+      "distanceMeters": 5252,
+      "lat": 34.46722412109375,
+      "lon": -119.68694305419922
+    },
+    {
+      "xid": "Q7487146",
+      "name": "Shalawa Meadow, California",
+      "kinds": "interesting_places,natural,nature_reserves,other_nature_conservation_areas",
+      "distanceMeters": 5735,
+      "lat": 34.41680145263672,
+      "lon": -119.63600158691406
+    },
+    {
+      "xid": "W275282282",
+      "name": "Casa del Herrero",
+      "kinds": "cultural,museums,interesting_places,other_museums",
+      "distanceMeters": 5901,
+      "lat": 34.436134338378906,
+      "lon": -119.63672637939453
+    },
+    {
+      "xid": "Q4670834",
+      "name": "Acacia Lodge",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "distanceMeters": 6315,
+      "lat": 34.4229621887207,
+      "lon": -119.62955474853516
+    },
+    {
+      "xid": "N358852194",
+      "name": "Arlington Peak",
+      "kinds": "mountain_peaks,geological_formations,natural,interesting_places",
+      "distanceMeters": 7038,
+      "lat": 34.48277282714844,
+      "lon": -119.71458435058594
+    },
+    {
+      "xid": "N358787092",
+      "name": "La Cumbre Peak",
+      "kinds": "mountain_peaks,geological_formations,natural,interesting_places",
+      "distanceMeters": 8276,
+      "lat": 34.494441986083984,
+      "lon": -119.71263885498047
+    }
+  ]
+}

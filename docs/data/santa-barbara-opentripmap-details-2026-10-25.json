@@ -1,0 +1,105 @@
+{
+  "source": "OpenTripMap",
+  "retrievedAt": "2026-10-25T09:15:06.449Z",
+  "details": [
+    {
+      "xid": "Q2704990",
+      "name": "Santa Barbara County Courthouse",
+      "rate": "3h",
+      "kinds": "historic_architecture,architecture,interesting_places,other_buildings_and_structures",
+      "address": {
+        "city": "Santa Barbara",
+        "state": "California",
+        "county": "Santa Barbara County",
+        "country": "United States of America",
+        "postcode": "93131",
+        "country_code": "us",
+        "neighbourhood": "East Side"
+      },
+      "point": {
+        "lon": -119.70246124267578,
+        "lat": 34.42435073852539
+      },
+      "otm": "https://opentripmap.com/en/card/Q2704990",
+      "wikipedia": "https://en.wikipedia.org/wiki/Santa%20Barbara%20County%20Courthouse",
+      "preview": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Santa_Barbara_County_Courthouse.jpg/400px-Santa_Barbara_County_Courthouse.jpg",
+      "description": "The Santa Barbara County Courthouse is a Spanish Colonial Revival style building designed by William Mooser III and completed in 1929. Architect Charles Willard Moore called it the \"grandest Spanish Colonial Revival structure ever built,\" and the prime example of Santa Barbara's adoption of Spanish Colonial as its civic style.Located at 1100 Anacapa Street, in downtown Santa Barbara, California. the building replaced a smaller Greek Revival courthouse built there in 1872–88 and badly damaged in "
+    },
+    {
+      "xid": "W389994752",
+      "name": "Mission Santa Barbara",
+      "rate": "3h",
+      "kinds": "religion,other_temples,interesting_places",
+      "address": {
+        "city": "Santa Barbara",
+        "road": "Laguna Street",
+        "house": "Mission Santa Barbara",
+        "state": "California",
+        "county": "Santa Barbara County",
+        "country": "United States of America",
+        "postcode": "93105",
+        "country_code": "us",
+        "house_number": "2201",
+        "neighbourhood": "Westside"
+      },
+      "point": {
+        "lon": -119.71322631835938,
+        "lat": 34.43837356567383
+      },
+      "otm": "https://opentripmap.com/en/card/W389994752",
+      "wikipedia": "https://en.wikipedia.org/wiki/Mission%20Santa%20Barbara",
+      "preview": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Mission_Santa_Barbara01.jpg/400px-Mission_Santa_Barbara01.jpg",
+      "description": "Mission Santa Barbara (Spanish: Misión de Santa Bárbara) is a Spanish mission in Santa Barbara, California. It was founded by Padre Fermín Lasuén for the Franciscan order on December 4, 1786, the feast day of Saint Barbara, as the tenth mission for the religious conversion of the indigenous local Chumash-Barbareño tribe of Native American people. The mission is the namesake of the city of Santa Barbara as well as of Santa Barbara County and comes from the legend of Saint Barbara, a girl who was "
+    },
+    {
+      "xid": "N4302164505",
+      "name": "Moreton Bay Fig Tree",
+      "rate": "3",
+      "kinds": "other,unclassified_objects,interesting_places,historic_object",
+      "address": {
+        "city": "Santa Barbara",
+        "road": "Chapala Street",
+        "state": "California",
+        "county": "Santa Barbara County",
+        "country": "United States of America",
+        "postcode": "93101",
+        "country_code": "us",
+        "house_number": "225",
+        "neighbourhood": "Waterfront"
+      },
+      "point": {
+        "lon": -119.69403076171875,
+        "lat": 34.41364288330078
+      },
+      "otm": "https://opentripmap.com/en/card/N4302164505",
+      "wikipedia": "https://en.wikipedia.org/wiki/Moreton%20Bay%20Fig%20Tree%20%28Santa%20Barbara%2C%20California%29",
+      "preview": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Moreton_Bay_Fig_Tree.jpg/400px-Moreton_Bay_Fig_Tree.jpg",
+      "description": "Santa Barbara's Moreton Bay Fig Tree located in Santa Barbara, California is believed to be the largest Ficus macrophylla in the United States."
+    },
+    {
+      "xid": "W349829214",
+      "name": "De la Guerra Plaza",
+      "rate": "2",
+      "kinds": "urban_environment,gardens_and_parks,cultural,interesting_places",
+      "address": {
+        "city": "Santa Barbara",
+        "road": "De la Guerra Place",
+        "house": "Rincon Strategies",
+        "state": "California",
+        "county": "Santa Barbara County",
+        "country": "United States of America",
+        "postcode": "93101",
+        "country_code": "us",
+        "house_number": "727",
+        "neighbourhood": "Waterfront"
+      },
+      "point": {
+        "lon": -119.6987075805664,
+        "lat": 34.419944763183594
+      },
+      "otm": "https://opentripmap.com/en/card/W349829214",
+      "wikipedia": "https://en.wikipedia.org/wiki/Plaza%20de%20la%20Guerra",
+      "description": "Plaza de la Guerra, also known as De La Guerra Plaza, is a public plaza in downtown Santa Barbara, California, USA, located right next to the Santa Barbara News-Press offices. It is best known for the activities that take place there during Santa Barbara's annual Fiesta in early August. There are booths, musical performances and many festivities for the downtown area in De La Guerra Plaza. In the 1950s, there was a glass-blowing booth where children could buy and take home glass ornaments as sou"
+    }
+  ]
+}

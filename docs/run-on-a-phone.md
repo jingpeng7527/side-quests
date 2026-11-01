@@ -35,6 +35,17 @@ Anyone with the link can reach your game while it runs; **Ctrl+C** ends the part
 
 **In the browser:** proof photos use the phone's camera through the browser's photo picker. Maps are view-only, and places are set with "Use my spot".
 
+### If something goes wrong (`npm run party`)
+
+| Problem | Fix |
+|---|---|
+| "cloudflared isn't installed" | Install it (table above), or use `npm run party:local`. |
+| The tunnel won't start | The script prints cloudflared's own error. Some networks block tunnels entirely; use `party:local` or another network. |
+| The phone shows "can't be reached" at first | Brand-new links take up to half a minute to appear. Wait and reload. |
+| macOS asks whether `node` or `workerd` may accept connections | Click **Allow**. That's how phones on your Wi-Fi reach the game. |
+| Port 8787 is busy | Another game server is already running. `party` reuses it, or stop it first. |
+| Changes don't show up | `party` rebuilds the web app each run. Restart it after editing code, and reload the page on phones. |
+
 ---
 
 ## Expo Go (for developing)
@@ -82,6 +93,18 @@ EXPO_PUBLIC_SERVER_URL=https://<printed-address>.trycloudflare.com npx expo star
 | **You're running through a tunnel…** | Set `EXPO_PUBLIC_SERVER_URL` as shown above. |
 | The browser shows a blank page (Metro on port 8081) | Expo was started from the repo root. Start it from `app/` (`npm run app`). |
 | Expo Go says the project needs a newer/older SDK | Update Expo Go. This project uses Expo SDK 58. |
+
+### Deep links for driving simulators
+
+Open the app with `?demo=<phase>` to land in a seeded game (you + three bots), `&place=1` to be dealt a quest with a place, `?create=1` for an empty lobby, or `?join=CODE&name=Ana` to join one.
+
+```sh
+xcrun simctl openurl booted "exp://<your-ip>:8081/--/?demo=playing&place=1"
+adb shell am start -a android.intent.action.VIEW -d "'exp://<your-ip>:8081/--/?join=ABCD&name=Ana'"
+# web: http://localhost:8081/?demo=verifying
+```
+
+On a cold start Expo Go drops the link's parameters — open the project first, then the link.
 
 ---
 

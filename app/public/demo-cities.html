@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cross-City Quest Demo — Side Quests</title>
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --card: #ffffff;
+    --ink: #1c1b19;
+    --muted: #6b6560;
+    --line: #e4e0d9;
+    --accent: #b5482a;
+    --accent-ink: #ffffff;
+    --place: #3a6b52;
+    --event: #7a4fb5;
+    --weather: #2f6f9e;
+    --news: #946b1f;
+    --fallback: #b5482a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171614;
+      --card: #211f1c;
+      --ink: #f1ede6;
+      --muted: #a39b90;
+      --line: #35322c;
+      --accent: #e08361;
+      --accent-ink: #1c1b19;
+      --place: #7bc8a0;
+      --event: #c3a4ef;
+      --weather: #8ec6ec;
+      --news: #e3b767;
+      --fallback: #e08361;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 56px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    max-width: 980px;
+    margin: 0 auto 28px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 6px; }
+  .sub { color: var(--muted); max-width: 640px; margin: 0 0 16px; }
+  .controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pickers { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  select {
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 0.95rem;
+    min-width: 160px;
+  }
+  select:disabled { opacity: 0.6; }
+  .vs { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+  button {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #status { color: var(--muted); font-size: 0.9rem; }
+  main.grid {
+    max-width: 980px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 720px) {
+    main.grid { grid-template-columns: 1fr; }
+  }
+  .city {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 18px 20px;
+  }
+  .city h2 { margin: 0 0 2px; font-size: 1.15rem; }
+  .city .region { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .badge.fallback { color: var(--fallback); border-color: var(--fallback); }
+  .badge.live { color: var(--place); border-color: var(--place); }
+  h3.section { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 18px 0 8px; }
+  .quest {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .quest .text { font-weight: 600; margin-bottom: 4px; }
+  .quest .fact-link {
+    font-size: 0.82rem;
+    color: var(--muted);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+  .kind-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; flex: none; }
+  .kind-place .kind-dot { background: var(--place); }
+  .kind-event .kind-dot { background: var(--event); }
+  .kind-weather .kind-dot { background: var(--weather); }
+  .kind-news .kind-dot { background: var(--news); }
+  .fact {
+    font-size: 0.85rem;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .fact:last-child { border-bottom: none; }
+  .fact .fact-title { font-weight: 600; }
+  .fact .fact-detail { color: var(--muted); margin-top: 2px; }
+  a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); }
+  a:hover { text-decoration-color: currentColor; }
+  details.notes { margin-top: 14px; font-size: 0.82rem; color: var(--muted); }
+  details.notes summary { cursor: pointer; }
+  details.notes ul { margin: 8px 0 0; padding-left: 18px; }
+  .empty { color: var(--muted); font-size: 0.9rem; padding: 20px 0; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cross-City Quest Demo</h1>
+  <p class="sub">
+    A standalone demo of the quest-generation pipeline: live place, weather, and event data for two
+    cities is sanitized and fed to OpenAI, which writes photo quests grounded in those specific facts.
+    This page is independent of the real game — it never reads your location, never joins a lobby, and
+    never changes how quests are generated for a live game.
+  </p>
+  <div class="controls">
+    <div class="pickers">
+      <select id="pickA" disabled><option>Loading cities…</option></select>
+      <span class="vs">vs</span>
+      <select id="pickB" disabled><option>Loading cities…</option></select>
+    </div>
+    <button id="regen" disabled>Generate again</button>
+    <span id="status"></span>
+  </div>
+</header>
+<main id="cities" class="grid">
+  <div class="empty">Loading…</div>
+</main>
+
+<script>
+(function () {
+  const KIND_LABEL = { place: "Place", event: "Event", weather: "Weather", news: "News" };
+
+  function el(tag, className, text) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function fmtTime(iso) {
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+      });
+    } catch {
+      return iso;
+    }
+  }
+
+  function factCard(fact) {
+    const row = el("div", "fact kind-" + fact.kind);
+    const title = el("div", "fact-title");
+    title.append(el("span", "kind-dot"));
+    const link = el("a", null, fact.title);
+    link.href = fact.sourceUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    title.append(link, document.createTextNode(" · " + KIND_LABEL[fact.kind] + " · " + fact.sourceLabel));
+    row.append(title, el("div", "fact-detail", fact.detail));
+    return row;
+  }
+
+  function questCard(quest, factsById) {
+    const fact = factsById.get(quest.factId);
+    const card = el("div", "quest");
+    card.append(el("div", "text", quest.text));
+    if (fact) {
+      const line = el("div", "fact-link kind-" + fact.kind);
+      line.append(el("span", "kind-dot"));
+      line.append(document.createTextNode("Grounded in: " + fact.title + " — "));
+      const link = el("a", null, fact.sourceLabel);
+      link.href = fact.sourceUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      line.append(link);
+      card.append(line);
+    }
+    return card;
+  }
+
+  function cityCard(result) {
+    const card = el("div", "city");
+    card.append(el("h2", null, result.city.name));
+    card.append(el("div", "region", result.city.region));
+
+    const badges = el("div", "badges");
+    const snapshotBadge = el("span", "badge", "Snapshot: " + fmtTime(result.retrievedAt));
+    badges.append(snapshotBadge);
+    if (result.usedFallback) {
+      const b = el("span", "badge fallback", "Saved example");
+      if (result.fallbackReason) b.title = result.fallbackReason;
+      badges.append(b);
+    } else {
+      badges.append(el("span", "badge live", "Live generation"));
+    }
+    card.append(badges);
+
+    const factsById = new Map(result.facts.map((f) => [f.id, f]));
+
+    card.append(el("h3", "section", "Quests"));
+    if (result.quests.length) {
+      result.quests.forEach((q) => card.append(questCard(q, factsById)));
+    } else {
+      card.append(el("div", "empty", "No quest was generated."));
+    }
+
+    card.append(el("h3", "section", "Facts used"));
+    if (result.facts.length) {
+      result.facts.forEach((f) => card.append(factCard(f)));
+    } else {
+      card.append(el("div", "empty", "No facts available for this city right now."));
+    }
+
+    if (result.notes.length) {
+      const details = el("details", "notes");
+      details.append(el("summary", null, "Sanitization notes (" + result.notes.length + ")"));
+      const ul = el("ul");
+      result.notes.forEach((n) => ul.append(el("li", null, n)));
+      details.append(ul);
+      card.append(details);
+    }
+
+    return card;
+  }
+
+  function render(data) {
+    const main = document.getElementById("cities");
+    main.innerHTML = "";
+    data.results.forEach((result) => main.append(cityCard(result)));
+  }
+
+  function syncPickerOptions() {
+    // Don't let both sides pick the same city: disable whichever option is chosen
+    // in the OTHER select.
+    const pickA = document.getElementById("pickA");
+    const pickB = document.getElementById("pickB");
+    for (const opt of pickA.options) opt.disabled = opt.value === pickB.value;
+    for (const opt of pickB.options) opt.disabled = opt.value === pickA.value;
+  }
+
+  async function loadCities() {
+    const pickA = document.getElementById("pickA");
+    const pickB = document.getElementById("pickB");
+    const status = document.getElementById("status");
+    try {
+      const res = await fetch("/api/demo/cities");
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const cities = await res.json();
+      const fillOptions = (select) => {
+        select.innerHTML = "";
+        cities.forEach((c) => {
+          const opt = el("option", null, c.name);
+          opt.value = c.id;
+          select.append(opt);
+        });
+      };
+      fillOptions(pickA);
+      fillOptions(pickB);
+      // Default to Santa Barbara vs. Chicago (the two curated examples) when present,
+      // otherwise just the first two in the roster.
+      pickA.value = cities.some((c) => c.id === "santa-barbara") ? "santa-barbara" : cities[0]?.id;
+      pickB.value = cities.some((c) => c.id === "chicago") ? "chicago" : cities[1]?.id;
+      pickA.disabled = false;
+      pickB.disabled = false;
+      document.getElementById("regen").disabled = false;
+      syncPickerOptions();
+      return true;
+    } catch (err) {
+      status.textContent = "Could not load the city list: " + err.message;
+      return false;
+    }
+  }
+
+  async function load() {
+    const button = document.getElementById("regen");
+    const status = document.getElementById("status");
+    const a = document.getElementById("pickA").value;
+    const b = document.getElementById("pickB").value;
+    if (!a || !b) return;
+    button.disabled = true;
+    status.textContent = "Generating…";
+    try {
+      const res = await fetch("/api/demo/cross-city?a=" + encodeURIComponent(a) + "&b=" + encodeURIComponent(b));
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      render(data);
+      status.textContent = "Last generated " + fmtTime(data.generatedAt);
+    } catch (err) {
+      status.textContent = "Could not load the demo: " + err.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  document.getElementById("regen").addEventListener("click", load);
+  document.getElementById("pickA").addEventListener("change", () => { syncPickerOptions(); load(); });
+  document.getElementById("pickB").addEventListener("change", () => { syncPickerOptions(); load(); });
+
+  loadCities().then((ok) => { if (ok) load(); });
+})();
+</script>
+</body>
+</html>

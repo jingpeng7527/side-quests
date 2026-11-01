@@ -36,6 +36,11 @@ export interface Env {
   OPENAI_API_KEY?: string;
   /** Optional: which OpenAI model writes quests (default in quests.ts). */
   OPENAI_MODEL?: string;
+  /** Optional: enables real place/event data in the standalone cross-city demo (server/src/demo/*). */
+  OPENTRIPMAP_API_KEY?: string;
+  TICKETMASTER_API_KEY?: string;
+  /** Cached fact snapshots for that same demo, durable across isolates. Optional — unset falls back to in-memory only. */
+  DEMO_SNAPSHOTS?: KVNamespace;
   DEV_TOOLS?: string;
   /** Overrides for testing: how long a quiet lobby lives, and how long before an away host is replaced. */
   LOBBY_TTL_SECONDS?: string;
